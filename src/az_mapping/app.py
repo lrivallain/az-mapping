@@ -193,7 +193,8 @@ def get_mappings() -> Response | tuple[Response, int]:
     help="Don't open the browser automatically.",
 )
 @click.option(
-    "--verbose", "-v",
+    "--verbose",
+    "-v",
     is_flag=True,
     default=False,
     help="Enable verbose logging.",

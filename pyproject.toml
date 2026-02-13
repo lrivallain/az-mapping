@@ -64,6 +64,7 @@ addopts = "-v --tb=short"
 target-version = "py311"
 line-length = 100
 src = ["src"]
+exclude = ["src/az_mapping/_version.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "UP", "B", "SIM"]
