@@ -842,6 +842,11 @@ body {
     margin: 0;
 }
 
+.sku-table-container {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
 .sku-table {
     width: 100%;
     border-collapse: collapse;

@@ -405,6 +405,15 @@ function initRegionCombobox() {
 function onRegionChange() {
     updateLoadButton();
     syncUrlParams();
+    // Reset SKU data when region changes to avoid confusion
+    resetSkuSection();
+}
+
+function resetSkuSection() {
+    lastSkuData = null;
+    document.getElementById("sku-empty").style.display = "block";
+    document.getElementById("sku-table-container").style.display = "none";
+    document.getElementById("sku-loading").style.display = "none";
 }
 
 function updateLoadButton() {
@@ -1100,7 +1109,7 @@ function renderSkuTable(skus, subscriptionName) {
     html += "<th>Memory (GB)</th>";
     
     allZones.forEach(zone => {
-        html += `<th>Zone ${escapeHtml(zone)}</th>`;
+        html += `<th>Logical Zone ${escapeHtml(zone)}</th>`;
     });
     
     html += "</tr></thead><tbody>";
