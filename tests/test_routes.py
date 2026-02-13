@@ -476,9 +476,7 @@ class TestGetSkus:
                     "name": "Standard_D2s_v3",
                     "resourceType": "virtualMachines",
                     "locations": ["eastus"],
-                    "locationInfo": [
-                        {"location": "eastus", "zones": ["1", "2", "3"]}
-                    ],
+                    "locationInfo": [{"location": "eastus", "zones": ["1", "2", "3"]}],
                     "capabilities": [],
                     "restrictions": [
                         {

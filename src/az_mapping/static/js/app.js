@@ -1007,3 +1007,181 @@ function exportTableCSV() {
     a.click();
     URL.revokeObjectURL(a.href);
 }
+
+// ---------------------------------------------------------------------------
+// SKU Section
+// ---------------------------------------------------------------------------
+
+let lastSkuData = null; // Cached SKU data
+
+function toggleSkuSection() {
+    const section = document.querySelector(".sku-section");
+    section.classList.toggle("collapsed");
+}
+
+async function loadSkus() {
+    const region = document.getElementById("region-select").value;
+    const tenant = document.getElementById("tenant-select").value;
+    
+    if (!region) {
+        showError("Please select a region first.");
+        return;
+    }
+    
+    // Use first selected subscription
+    if (selectedSubscriptions.size === 0) {
+        showError("Please select at least one subscription.");
+        return;
+    }
+    
+    const subscriptionId = [...selectedSubscriptions][0];
+    
+    document.getElementById("sku-loading").style.display = "flex";
+    document.getElementById("sku-empty").style.display = "none";
+    document.getElementById("sku-table-container").style.display = "none";
+    
+    try {
+        const params = new URLSearchParams({ region, subscriptionId });
+        if (tenant) params.append("tenantId", tenant);
+        
+        const data = await apiFetch(`/api/skus?${params}`);
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        lastSkuData = data;
+        renderSkuTable(data);
+        
+    } catch (err) {
+        showError(`Failed to fetch SKUs: ${err.message}`);
+        document.getElementById("sku-empty").style.display = "block";
+    } finally {
+        document.getElementById("sku-loading").style.display = "none";
+    }
+}
+
+function renderSkuTable(skus) {
+    const container = document.getElementById("sku-table-container");
+    const filterInput = document.getElementById("sku-filter");
+    
+    if (!skus || skus.length === 0) {
+        container.innerHTML = "<p style='text-align:center; padding:2rem; color:var(--text-muted);'>No SKUs found for this region.</p>";
+        container.style.display = "block";
+        return;
+    }
+    
+    // Apply filter
+    const filterText = filterInput.value.toLowerCase();
+    const filteredSkus = skus.filter(sku => 
+        !filterText || sku.name.toLowerCase().includes(filterText)
+    );
+    
+    if (filteredSkus.length === 0) {
+        container.innerHTML = "<p style='text-align:center; padding:2rem; color:var(--text-muted);'>No SKUs match the filter.</p>";
+        container.style.display = "block";
+        return;
+    }
+    
+    // Determine all zones in the region
+    const allZones = [...new Set(filteredSkus.flatMap(s => s.zones))].sort();
+    
+    // Build table
+    let html = '<table class="sku-table">';
+    html += "<thead><tr>";
+    html += "<th>SKU Name</th>";
+    html += "<th>Family</th>";
+    html += "<th>vCPUs</th>";
+    html += "<th>Memory (GB)</th>";
+    
+    allZones.forEach(zone => {
+        html += `<th>Zone ${escapeHtml(zone)}</th>`;
+    });
+    
+    html += "</tr></thead><tbody>";
+    
+    filteredSkus.forEach(sku => {
+        html += "<tr>";
+        html += `<td><strong>${escapeHtml(sku.name)}</strong></td>`;
+        html += `<td>${escapeHtml(sku.family || "—")}</td>`;
+        html += `<td>${escapeHtml(sku.capabilities.vCPUs || "—")}</td>`;
+        html += `<td>${escapeHtml(sku.capabilities.MemoryGB || "—")}</td>`;
+        
+        allZones.forEach(zone => {
+            const isAvailable = sku.zones.includes(zone);
+            const isRestricted = sku.restrictions.includes(zone);
+            
+            if (isRestricted) {
+                html += '<td class="zone-restricted" title="Restricted in this zone">⚠</td>';
+            } else if (isAvailable) {
+                html += '<td class="zone-available">✓</td>';
+            } else {
+                html += '<td class="zone-unavailable">—</td>';
+            }
+        });
+        
+        html += "</tr>";
+    });
+    
+    html += "</tbody></table>";
+    container.innerHTML = html;
+    container.style.display = "block";
+}
+
+// Re-render SKU table when filter changes
+document.addEventListener("DOMContentLoaded", () => {
+    const filterInput = document.getElementById("sku-filter");
+    if (filterInput) {
+        filterInput.addEventListener("input", () => {
+            if (lastSkuData) {
+                renderSkuTable(lastSkuData);
+            }
+        });
+    }
+});
+
+function exportSkuCSV() {
+    if (!lastSkuData || lastSkuData.length === 0) {
+        showError("No SKU data to export.");
+        return;
+    }
+    
+    const allZones = [...new Set(lastSkuData.flatMap(s => s.zones))].sort();
+    
+    // Header row
+    const headers = ["SKU Name", "Family", "vCPUs", "Memory (GB)", 
+        ...allZones.map(z => `Zone ${z}`)];
+    
+    // Data rows
+    const rows = lastSkuData.map(sku => {
+        const zoneCols = allZones.map(zone => {
+            const isAvailable = sku.zones.includes(zone);
+            const isRestricted = sku.restrictions.includes(zone);
+            
+            if (isRestricted) return "Restricted";
+            if (isAvailable) return "Available";
+            return "Unavailable";
+        });
+        
+        return [
+            sku.name,
+            sku.family || "",
+            sku.capabilities.vCPUs || "",
+            sku.capabilities.MemoryGB || "",
+            ...zoneCols
+        ];
+    });
+    
+    // Build CSV string
+    const csvContent = [headers, ...rows]
+        .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+    
+    const region = document.getElementById("region-select").value || "skus";
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.download = `az-skus-${region}.csv`;
+    a.href = URL.createObjectURL(blob);
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
