@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Azure AZ Mapping Viewer</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
@@ -11,10 +12,7 @@
 
 <header class="app-header">
     <div class="header-content">
-        <svg class="header-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
-            <circle cx="12" cy="10" r="3"/>
-        </svg>
+        <img class="header-icon" src="{{ url_for('static', filename='img/favicon.svg') }}" width="28" height="28" alt="">
         <h1>Azure AZ Mapping Viewer</h1>
     </div>
     <p class="header-subtitle">Visualize logical-to-physical Availability Zone mappings across subscriptions</p>
