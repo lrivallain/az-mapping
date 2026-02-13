@@ -1028,13 +1028,15 @@ async function loadSkus() {
         return;
     }
     
-    // Use first selected subscription
+    // Use first selected subscription (SKU API is subscription-specific)
+    // Users can compare SKUs across subscriptions by loading multiple times
     if (selectedSubscriptions.size === 0) {
         showError("Please select at least one subscription.");
         return;
     }
     
     const subscriptionId = [...selectedSubscriptions][0];
+    const subscriptionName = getSubName(subscriptionId);
     
     document.getElementById("sku-loading").style.display = "flex";
     document.getElementById("sku-empty").style.display = "none";
@@ -1051,7 +1053,7 @@ async function loadSkus() {
         }
         
         lastSkuData = data;
-        renderSkuTable(data);
+        renderSkuTable(data, subscriptionName);
         
     } catch (err) {
         showError(`Failed to fetch SKUs: ${err.message}`);
@@ -1112,7 +1114,7 @@ function renderSkuTable(skus) {
             const isRestricted = sku.restrictions.includes(zone);
             
             if (isRestricted) {
-                html += '<td class="zone-restricted" title="Restricted in this zone">⚠</td>';
+                html += '<td class="zone-restricted" title="Restricted: SKU not available in this zone">⚠</td>';
             } else if (isAvailable) {
                 html += '<td class="zone-available">✓</td>';
             } else {
@@ -1134,7 +1136,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (filterInput) {
         filterInput.addEventListener("input", () => {
             if (lastSkuData) {
-                renderSkuTable(lastSkuData);
+                // Re-render with the last used subscription name
+                const subscriptionId = [...selectedSubscriptions][0];
+                const subscriptionName = subscriptionId ? getSubName(subscriptionId) : "Unknown";
+                renderSkuTable(lastSkuData, subscriptionName);
             }
         });
     }

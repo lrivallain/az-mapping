@@ -879,7 +879,8 @@ body {
 
 .zone-restricted {
     color: var(--warning);
-    text-decoration: line-through;
+    font-weight: 600;
+    font-size: 1.1rem;
 }
 
 /* Dark mode: SKU table header */
