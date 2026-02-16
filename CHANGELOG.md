@@ -20,6 +20,25 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.MICRO`).
 - 4 new tests for the tenant endpoint (15 total).
 
 
+## [2026.2.2] - TBD
+
+### Added
+
+- **SKU availability table** – view VM SKU availability per physical zone with filtering and CSV export.
+- Subscription selector dropdown when multiple subscriptions are selected (for SKU loading).
+- Automatic retry with exponential backoff for slow Azure SKU API calls.
+
+### Changed
+
+- SKU table headers now show both logical zone and physical zone (e.g., "Zone 1" / "eastus-az1").
+- Improved dark mode contrast for success/warning indicators.
+- SKU list auto-resets when region changes or mappings are reloaded.
+
+### Fixed
+
+- Azure API timeout errors now retry automatically (3 attempts, up to 60s per call).
+
+
 ## [2026.2.0] - 2026-02-13
 
 ### Added
