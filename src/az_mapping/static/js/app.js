@@ -1188,10 +1188,10 @@ function renderSkuTable(skus, subscriptionName) {
     html += "<th>vCPUs</th>";
     html += "<th>Memory (GB)</th>";
     
-    // Render headers with both logical zone number and physical zone name
+    // Render headers with zone number and physical zone name (with line break)
     allLogicalZones.forEach((lz, index) => {
         const pz = physicalZones[index];
-        html += `<th>Logical Zone ${escapeHtml(lz)} (${escapeHtml(pz)})</th>`;
+        html += `<th>Zone ${escapeHtml(lz)}<br>${escapeHtml(pz)}</th>`;
     });
     
     html += "</tr></thead><tbody>";
@@ -1261,9 +1261,9 @@ function exportSkuCSV() {
     const allLogicalZones = [...new Set(lastSkuData.flatMap(s => s.zones))].sort();
     const physicalZones = allLogicalZones.map(lz => physicalZoneMap[lz] || `Zone ${lz}`);
     
-    // Header row with both logical and physical zone information
+    // Header row with zone number and physical zone information
     const zoneHeaders = allLogicalZones.map((lz, index) => 
-        `Logical Zone ${lz} (${physicalZones[index]})`
+        `Zone ${lz}\n${physicalZones[index]}`
     );
     const headers = ["SKU Name", "Family", "vCPUs", "Memory (GB)", 
         ...zoneHeaders];

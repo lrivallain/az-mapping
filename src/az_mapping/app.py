@@ -15,6 +15,8 @@ import requests
 from azure.identity import DefaultAzureCredential
 from flask import Flask, Response, jsonify, render_template
 from flask import request as flask_request
+from requests.exceptions import ReadTimeout, RequestException
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 _PKG_DIR = Path(__file__).resolve().parent
 
@@ -49,6 +51,22 @@ def _get_headers(tenant_id: str | None = None) -> dict[str, str]:
         "Authorization": f"Bearer {token.token}",
         "Content-Type": "application/json",
     }
+
+
+@retry(
+    retry=retry_if_exception_type((ReadTimeout, RequestException)),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    reraise=True,
+)
+def _make_request_with_retry(
+    url: str, headers: dict[str, str], timeout: int = 30
+) -> requests.Response:
+    """Make HTTP request with retry logic for transient failures.
+
+    Retries up to 3 times with exponential backoff on ReadTimeout and RequestException.
+    """
+    return requests.get(url, headers=headers, timeout=timeout)
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +118,7 @@ def list_tenants() -> Response | tuple[Response, int]:
         all_tenants: list[dict] = []
 
         while url:
-            resp = requests.get(url, headers=headers, timeout=30)
+            resp = _make_request_with_retry(url, headers)
             resp.raise_for_status()
             data = resp.json()
             all_tenants.extend(data.get("value", []))
@@ -144,7 +162,7 @@ def list_subscriptions() -> Response | tuple[Response, int]:
         all_subs: list[dict] = []
 
         while url:
-            resp = requests.get(url, headers=headers, timeout=30)
+            resp = _make_request_with_retry(url, headers)
             resp.raise_for_status()
             data = resp.json()
             all_subs.extend(data.get("value", []))
@@ -177,7 +195,7 @@ def list_regions() -> Response | tuple[Response, int]:
         # Auto-discover a subscription when none specified
         if not sub_id:
             subs_url = f"{AZURE_MGMT_URL}/subscriptions?api-version={AZURE_API_VERSION}"
-            subs_resp = requests.get(subs_url, headers=headers, timeout=30)
+            subs_resp = _make_request_with_retry(subs_url, headers)
             subs_resp.raise_for_status()
             enabled = [
                 s["subscriptionId"]
@@ -189,7 +207,7 @@ def list_regions() -> Response | tuple[Response, int]:
             sub_id = enabled[0]
 
         url = f"{AZURE_MGMT_URL}/subscriptions/{sub_id}/locations?api-version={AZURE_API_VERSION}"
-        resp = requests.get(url, headers=headers, timeout=30)
+        resp = _make_request_with_retry(url, headers)
         resp.raise_for_status()
 
         locations = resp.json().get("value", [])
@@ -226,7 +244,7 @@ def get_mappings() -> Response | tuple[Response, int]:
     for sub_id in sub_ids:
         url = f"{AZURE_MGMT_URL}/subscriptions/{sub_id}/locations?api-version={AZURE_API_VERSION}"
         try:
-            resp = requests.get(url, headers=headers, timeout=30)
+            resp = _make_request_with_retry(url, headers)
             resp.raise_for_status()
             locations = resp.json().get("value", [])
 
@@ -291,7 +309,7 @@ def get_skus() -> Response | tuple[Response, int]:
 
         all_skus: list[dict] = []
         while url:
-            resp = requests.get(url, headers=headers, timeout=30)
+            resp = _make_request_with_retry(url, headers)
             resp.raise_for_status()
             data = resp.json()
             all_skus.extend(data.get("value", []))
