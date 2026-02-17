@@ -108,6 +108,14 @@ body {
     opacity: 0.85;
 }
 
+.footer-disclaimer {
+    margin-top: 0.4rem;
+    font-size: 0.7rem;
+    opacity: 0.6;
+    font-style: italic;
+    text-align: center;
+}
+
 /* ---- Layout ---- */
 .app-container {
     display: flex;
