@@ -175,3 +175,34 @@ def get_sku_availability(
     )
     azure_api.enrich_skus_with_quotas(result, region, subscription_id, tenant_id)
     return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def get_spot_scores(
+    region: str,
+    subscription_id: str,
+    vm_sizes: list[str],
+    instance_count: int = 1,
+    tenant_id: str | None = None,
+) -> str:
+    """Get Spot Placement Scores for VM sizes in a region.
+
+    Returns a score (High / Medium / Low) for each requested VM size,
+    indicating the likelihood of successful Spot VM allocation.
+    This is **not** a measure of datacenter capacity.
+
+    Args:
+        region: Azure region name (e.g. ``eastus``).
+        subscription_id: Subscription ID to query.
+        vm_sizes: List of VM size names (e.g. ``["Standard_D2s_v3"]``).
+        instance_count: Number of instances to evaluate (default: 1).
+        tenant_id: Optional tenant ID to scope the query.
+    """
+    result = azure_api.get_spot_placement_scores(
+        region,
+        subscription_id,
+        vm_sizes,
+        instance_count,
+        tenant_id,
+    )
+    return json.dumps(result, indent=2)

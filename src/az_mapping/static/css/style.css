@@ -917,15 +917,152 @@ body {
     font-size: 1.1rem;
 }
 
+/* ---- Spot Placement Score badges ---- */
+.spot-badge {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    text-transform: capitalize;
+}
+.spot-high {
+    background: var(--success);
+    color: #fff;
+}
+.spot-medium {
+    background: var(--warning);
+    color: #1a1a1a;
+}
+.spot-low {
+    background: var(--danger);
+    color: #fff;
+}
+.spot-unknown {
+    background: var(--border);
+    color: var(--text-muted);
+}
+
+/* Spot controls */
+.sku-controls-sep {
+    width: 1px;
+    align-self: stretch;
+    background: var(--border);
+    margin: 0 0.25rem;
+}
+.spot-instance-label {
+    display: flex;
+    align-items: center;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.spot-instance-input {
+    width: 70px;
+    padding: 0.5rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--input-bg);
+    color: var(--text);
+    font-size: 0.875rem;
+    text-align: center;
+}
+.spot-instance-input:focus {
+    outline: none;
+    border-color: var(--azure-blue);
+    box-shadow: 0 0 0 3px rgba(0, 120, 212, 0.1);
+}
+
+/* Spot score cell – clickable */
+.spot-cell-btn {
+    background: none;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    padding: 0.2rem 0.55rem;
+    cursor: pointer;
+    color: var(--azure-blue);
+    font-size: 0.78rem;
+    transition: all var(--transition);
+}
+.spot-cell-btn:hover {
+    background: var(--azure-light);
+    border-color: var(--azure-blue);
+}
+.spot-cell-btn.has-score {
+    border: none;
+    padding: 0;
+}
+
+/* ---- Modal ---- */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.modal-dialog {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    padding: 1.5rem;
+    width: 340px;
+    max-width: 90vw;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+.modal-dialog h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--azure-dark);
+    margin: 0;
+}
+.modal-sku-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text);
+    margin: 0;
+}
+.modal-dialog label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+.modal-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+.modal-actions .primary-btn {
+    flex: 1;
+    padding: 0.5rem;
+}
+.modal-actions .secondary-btn {
+    flex: 1;
+    padding: 0.5rem;
+    justify-content: center;
+}
+
 /* Dark mode: SKU table header */
 [data-theme="dark"] .sku-table th {
     background: var(--azure-light);
     color: #58a6ff;
 }
 
+[data-theme="dark"] .modal-dialog h3 {
+    color: #58a6ff;
+}
+
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .sku-table th {
         background: var(--azure-light);
+        color: #58a6ff;
+    }
+    :root:not([data-theme="light"]) .modal-dialog h3 {
         color: #58a6ff;
     }
 }

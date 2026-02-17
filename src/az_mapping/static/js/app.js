@@ -14,6 +14,7 @@ let selectedSkuSubscription = null; // subscription selected for SKU loading
 let lastSkuData = null;          // cached SKU data
 let skuSortColumn = null;        // current SKU table sort column
 let skuSortAsc = true;           // sort direction
+let lastSpotScores = null;       // cached spot placement scores {scores: {sku: score}, errors: []}
 
 // ---------------------------------------------------------------------------
 // Theme management
@@ -161,6 +162,19 @@ async function apiFetch(url) {
     if (!resp.ok) {
         const body = await resp.json().catch(() => ({}));
         throw new Error(body.error || `HTTP ${resp.status}`);
+    }
+    return resp.json();
+}
+
+async function apiPost(url, body) {
+    const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.error || `HTTP ${resp.status}`);
     }
     return resp.json();
 }
@@ -481,6 +495,7 @@ function onRegionChange() {
 
 function resetSkuSection() {
     lastSkuData = null;
+    lastSpotScores = null;
     skuSortColumn = null;
     skuSortAsc = true;
     document.getElementById("sku-empty").style.display = "block";
@@ -1171,6 +1186,90 @@ async function loadSkus() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Spot Score Modal – per-SKU on-demand lookup with caching
+// ---------------------------------------------------------------------------
+let _spotModalSku = null;
+
+function openSpotModal(skuName) {
+    _spotModalSku = skuName;
+    document.getElementById("spot-modal-sku").textContent = skuName;
+    document.getElementById("spot-modal-instances").value = "1";
+    document.getElementById("spot-modal-loading").style.display = "none";
+    document.getElementById("spot-modal-result").style.display = "none";
+    document.getElementById("spot-modal").style.display = "flex";
+    const input = document.getElementById("spot-modal-instances");
+    input.focus();
+    input.select();
+}
+
+function closeSpotModal(event) {
+    // If called from overlay click, only close if clicking the overlay itself
+    if (event && event.target !== document.getElementById("spot-modal")) return;
+    document.getElementById("spot-modal").style.display = "none";
+    _spotModalSku = null;
+}
+
+function _onSpotModalKeydown(e) {
+    const modal = document.getElementById("spot-modal");
+    if (modal.style.display === "none") return;
+    if (e.key === "Escape") { closeSpotModal(); }
+    else if (e.key === "Enter") { e.preventDefault(); confirmSpotScore(); }
+}
+document.addEventListener("keydown", _onSpotModalKeydown);
+
+async function confirmSpotScore() {
+    const skuName = _spotModalSku;
+    if (!skuName) return;
+
+    const region = document.getElementById("region-select").value;
+    const tenant = document.getElementById("tenant-select").value;
+    const subscriptionId = selectedSkuSubscription || [...selectedSubscriptions][0];
+    if (!subscriptionId || !region) return;
+
+    const instanceCount = parseInt(document.getElementById("spot-modal-instances").value, 10) || 1;
+
+    document.getElementById("spot-modal-loading").style.display = "flex";
+    document.getElementById("spot-modal-result").style.display = "none";
+
+    try {
+        const payload = { region, subscriptionId, skus: [skuName], instanceCount };
+        if (tenant) payload.tenantId = tenant;
+
+        const result = await apiPost("/api/spot-scores", payload);
+
+        // Accumulate into cache
+        if (!lastSpotScores) {
+            lastSpotScores = { scores: {}, errors: [] };
+        }
+        if (result.scores) {
+            Object.assign(lastSpotScores.scores, result.scores);
+        }
+        if (result.errors && result.errors.length > 0) {
+            lastSpotScores.errors.push(...result.errors);
+        }
+
+        // Show result in modal
+        const score = result.scores?.[skuName] || "Unknown";
+        const cls = "spot-badge spot-" + score.toLowerCase();
+        const resultEl = document.getElementById("spot-modal-result");
+        resultEl.innerHTML = `Score: <span class="${cls}">${escapeHtml(score)}</span>`;
+        resultEl.style.display = "block";
+
+        // Re-render table to update the cell
+        const subscriptionName = getSubName(subscriptionId);
+        renderSkuTable(lastSkuData, subscriptionName);
+
+        if (result.errors && result.errors.length > 0) {
+            showError("Spot score error: " + result.errors.join("; "));
+        }
+    } catch (err) {
+        showError("Failed to fetch Spot Score: " + err.message);
+    } finally {
+        document.getElementById("spot-modal-loading").style.display = "none";
+    }
+}
+
 function skuSortIndicator(col) {
     if (skuSortColumn !== col) return "";
     return skuSortAsc ? " ▲" : " ▼";
@@ -1195,6 +1294,14 @@ function skuSortValue(sku, col) {
         case "qLimit":   { const q = sku.quota || {}; return q.limit != null ? q.limit : -1; }
         case "qUsed":    { const q = sku.quota || {}; return q.used  != null ? q.used  : -1; }
         case "qRemain":  { const q = sku.quota || {}; return q.remaining != null ? q.remaining : -1; }
+        case "spot":     {
+            const scores = lastSpotScores?.scores || {};
+            const s = (scores[sku.name] || "").toLowerCase();
+            if (s === "high") return 3;
+            if (s === "medium") return 2;
+            if (s === "low") return 1;
+            return 0;
+        }
         default:         return 0;
     }
 }
@@ -1261,6 +1368,7 @@ function renderSkuTable(skus, subscriptionName) {
         ["qLimit",  "Quota Limit"],
         ["qUsed",   "Quota Used"],
         ["qRemain", "Quota Remaining"],
+        ["spot",    "Spot Score"],
     ];
     sortCols.forEach(([col, label]) => {
         const active = skuSortColumn === col ? ' class="sort-active"' : '';
@@ -1286,6 +1394,17 @@ function renderSkuTable(skus, subscriptionName) {
         html += `<td>${quota.limit != null ? quota.limit : "—"}</td>`;
         html += `<td>${quota.used != null ? quota.used : "—"}</td>`;
         html += `<td>${quota.remaining != null ? quota.remaining : "—"}</td>`;
+        
+        // Spot Placement Score – clickable
+        const spotScores = lastSpotScores?.scores || {};
+        const spotScore = spotScores[sku.name] || "";
+        const escapedSku = sku.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        if (spotScore) {
+            const cls = "spot-badge spot-" + spotScore.toLowerCase();
+            html += `<td><button type="button" class="spot-cell-btn has-score" onclick="openSpotModal('${escapedSku}')" title="Click to refresh score"><span class="${cls}">${escapeHtml(spotScore)}</span></button></td>`;
+        } else {
+            html += `<td><button type="button" class="spot-cell-btn" onclick="openSpotModal('${escapedSku}')" title="Get Spot Placement Score">Score?</button></td>`;
+        }
         
         allLogicalZones.forEach(logicalZone => {
             const isAvailable = sku.zones.includes(logicalZone);
@@ -1327,6 +1446,7 @@ function exportSkuCSV() {
     );
     const headers = ["SKU Name", "Family", "vCPUs", "Memory (GB)",
         "Quota Limit", "Quota Used", "Quota Remaining",
+        "Spot Score",
         ...zoneHeaders];
     
     // Data rows
@@ -1349,6 +1469,7 @@ function exportSkuCSV() {
             quota.limit != null ? quota.limit : "",
             quota.used != null ? quota.used : "",
             quota.remaining != null ? quota.remaining : "",
+            (lastSpotScores?.scores || {})[sku.name] || "",
             ...zoneCols
         ];
     });

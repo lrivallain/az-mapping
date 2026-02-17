@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
 from az_mapping import azure_api
 
@@ -33,7 +34,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -204,6 +205,48 @@ async def get_skus(
         return JSONResponse(skus)
     except Exception as exc:
         logger.exception("Failed to fetch SKUs")
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/spot-scores
+# ---------------------------------------------------------------------------
+
+
+class SpotScoresRequest(BaseModel):
+    """Request body for the spot placement scores endpoint."""
+
+    region: str
+    subscriptionId: str
+    skus: list[str]
+    instanceCount: int = 1
+    tenantId: str | None = None
+
+
+@app.post("/api/spot-scores", tags=["SKUs"], summary="Get Spot Placement Scores")
+async def get_spot_scores(body: SpotScoresRequest) -> JSONResponse:
+    """Return Spot Placement Scores for a list of VM sizes.
+
+    Scores indicate the likelihood of successful Spot VM allocation
+    (High / Medium / Low) – this is **not** a measure of datacenter
+    capacity.
+    """
+    if not body.region or not body.subscriptionId or not body.skus:
+        return JSONResponse(
+            {"error": "'region', 'subscriptionId' and 'skus' are required"},
+            status_code=400,
+        )
+    try:
+        result = azure_api.get_spot_placement_scores(
+            body.region,
+            body.subscriptionId,
+            body.skus,
+            body.instanceCount,
+            body.tenantId,
+        )
+        return JSONResponse(result)
+    except Exception as exc:
+        logger.exception("Failed to fetch spot placement scores")
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 

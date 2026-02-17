@@ -776,3 +776,213 @@ class TestGetSkusQuotas:
         by_name = {s["name"]: s for s in data}
         assert by_name["Standard_D2s_v3"]["quota"]["limit"] == 50
         assert call_count["usages"] == 2
+
+
+# ---------------------------------------------------------------------------
+# POST /api/spot-scores
+# ---------------------------------------------------------------------------
+
+
+class TestSpotScores:
+    """Tests for the /api/spot-scores endpoint."""
+
+    def test_returns_scores_for_skus(self, client):
+        """Basic success: 3 SKUs → single batch POST returns scores."""
+        spot_response = {
+            "placementScores": [
+                {"sku": "Standard_D2s_v3", "score": "High", "region": "eastus"},
+                {"sku": "Standard_D4s_v3", "score": "Medium", "region": "eastus"},
+                {"sku": "Standard_E8s_v4", "score": "Low", "region": "eastus"},
+            ]
+        }
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = spot_response
+        mock_resp.raise_for_status.return_value = None
+
+        with patch("az_mapping.azure_api.requests.post", return_value=mock_resp):
+            resp = client.post(
+                "/api/spot-scores",
+                json={
+                    "region": "eastus",
+                    "subscriptionId": "sub-1",
+                    "skus": ["Standard_D2s_v3", "Standard_D4s_v3", "Standard_E8s_v4"],
+                },
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["scores"]["Standard_D2s_v3"] == "High"
+        assert data["scores"]["Standard_D4s_v3"] == "Medium"
+        assert data["scores"]["Standard_E8s_v4"] == "Low"
+        assert data["errors"] == []
+
+    def test_400_on_missing_required_fields(self, client):
+        """Missing required fields return 422 (Pydantic validation)."""
+        resp = client.post("/api/spot-scores", json={})
+        assert resp.status_code == 422
+
+        resp = client.post("/api/spot-scores", json={"region": "eastus"})
+        assert resp.status_code == 422
+
+    def test_chunking_150_skus(self, client):
+        """150 SKUs are split into 2 batches of 100+50."""
+        sku_names = [f"Standard_D{i}s_v3" for i in range(150)]
+
+        def _mock_post(url, **kwargs):
+            payload = kwargs.get("json", {})
+            desired_sizes = payload.get("desiredSizes", [])
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.raise_for_status.return_value = None
+            resp.json.return_value = {
+                "placementScores": [
+                    {"sku": s["sku"], "score": "High", "region": "eastus"} for s in desired_sizes
+                ]
+            }
+            return resp
+
+        with (
+            patch("az_mapping.azure_api.requests.post", side_effect=_mock_post),
+            patch("az_mapping.azure_api.time.sleep"),
+        ):
+            resp = client.post(
+                "/api/spot-scores",
+                json={
+                    "region": "eastus",
+                    "subscriptionId": "sub-1",
+                    "skus": sku_names,
+                },
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["scores"]) == 150
+        assert data["errors"] == []
+
+    def test_429_retry_succeeds(self, client):
+        """429 on first attempt → retry and succeed."""
+        call_count = {"n": 0}
+
+        def _mock_post(url, **kwargs):
+            call_count["n"] += 1
+            resp = MagicMock()
+            resp.raise_for_status.return_value = None
+            if call_count["n"] == 1:
+                resp.status_code = 429
+                resp.headers = {"Retry-After": "0"}
+            else:
+                resp.status_code = 200
+                resp.json.return_value = {
+                    "placementScores": [
+                        {"sku": "Standard_D2s_v3", "score": "High", "region": "eastus"}
+                    ]
+                }
+            return resp
+
+        with (
+            patch("az_mapping.azure_api.requests.post", side_effect=_mock_post),
+            patch("az_mapping.azure_api.time.sleep"),
+        ):
+            resp = client.post(
+                "/api/spot-scores",
+                json={
+                    "region": "eastus",
+                    "subscriptionId": "sub-1",
+                    "skus": ["Standard_D2s_v3"],
+                },
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["scores"]["Standard_D2s_v3"] == "High"
+        assert call_count["n"] == 2
+
+    def test_403_returns_empty_scores(self, client):
+        """403 → empty scores, no crash."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 403
+        mock_resp.headers = {}
+        mock_resp.raise_for_status.return_value = None
+
+        with patch("az_mapping.azure_api.requests.post", return_value=mock_resp):
+            resp = client.post(
+                "/api/spot-scores",
+                json={
+                    "region": "eastus",
+                    "subscriptionId": "sub-1",
+                    "skus": ["Standard_D2s_v3"],
+                },
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["scores"] == {}
+        assert data["errors"] == []
+
+    def test_404_returns_empty_scores(self, client):
+        """404 → empty scores (provider not registered), no crash."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+        mock_resp.headers = {}
+        mock_resp.raise_for_status.return_value = None
+
+        with patch("az_mapping.azure_api.requests.post", return_value=mock_resp):
+            resp = client.post(
+                "/api/spot-scores",
+                json={
+                    "region": "eastus",
+                    "subscriptionId": "sub-1",
+                    "skus": ["Standard_D2s_v3"],
+                },
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["scores"] == {}
+        assert data["errors"] == []
+
+    def test_cache_returns_cached_result(self, client):
+        """Second call with same params hits cache."""
+        spot_response = {
+            "placementScores": [{"sku": "Standard_D2s_v3", "score": "High", "region": "eastus"}]
+        }
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = spot_response
+        mock_resp.raise_for_status.return_value = None
+
+        with patch("az_mapping.azure_api.requests.post", return_value=mock_resp) as mock_post:
+            payload = {
+                "region": "eastus",
+                "subscriptionId": "sub-1",
+                "skus": ["Standard_D2s_v3"],
+            }
+            resp1 = client.post("/api/spot-scores", json=payload)
+            resp2 = client.post("/api/spot-scores", json=payload)
+
+        assert resp1.status_code == 200
+        assert resp2.status_code == 200
+        # Only one actual POST to Azure
+        assert mock_post.call_count == 1
+
+    def test_instance_count_forwarded(self, client):
+        """instanceCount parameter is forwarded to the Recommender RP."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"placementScores": []}
+        mock_resp.raise_for_status.return_value = None
+
+        with patch("az_mapping.azure_api.requests.post", return_value=mock_resp) as mock_post:
+            client.post(
+                "/api/spot-scores",
+                json={
+                    "region": "eastus",
+                    "subscriptionId": "sub-1",
+                    "skus": ["Standard_D2s_v3"],
+                    "instanceCount": 5,
+                },
+            )
+
+        call_kwargs = mock_post.call_args
+        assert call_kwargs.kwargs["json"]["desiredCount"] == 5

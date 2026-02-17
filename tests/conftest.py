@@ -33,3 +33,13 @@ def _clear_usage_cache():
     _usage_cache.clear()
     yield
     _usage_cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def _clear_spot_cache():
+    """Clear the spot placement scores cache between tests."""
+    from az_mapping.azure_api import _spot_cache
+
+    _spot_cache.clear()
+    yield
+    _spot_cache.clear()

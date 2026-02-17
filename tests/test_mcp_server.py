@@ -253,3 +253,64 @@ class TestMcpGetSkuAvailability:
         assert data[0]["quota"]["limit"] == 50
         assert data[0]["quota"]["used"] == 4
         assert data[0]["quota"]["remaining"] == 46
+
+
+# ---------------------------------------------------------------------------
+# get_spot_scores
+# ---------------------------------------------------------------------------
+
+
+class TestMcpGetSpotScores:
+    """Tests for the get_spot_scores MCP tool."""
+
+    @pytest.mark.anyio()
+    async def test_returns_spot_scores_json(self, _mock_credential):
+        mock_result = {
+            "scores": {
+                "Standard_D2s_v3": "High",
+                "Standard_D4s_v3": "Medium",
+            },
+            "errors": [],
+        }
+        with patch(
+            "az_mapping.azure_api.get_spot_placement_scores",
+            return_value=mock_result,
+        ):
+            content, _ = await mcp.call_tool(
+                "get_spot_scores",
+                {
+                    "region": "eastus",
+                    "subscription_id": "sub-1",
+                    "vm_sizes": ["Standard_D2s_v3", "Standard_D4s_v3"],
+                },
+            )
+
+        data = json.loads(content[0].text)
+        assert data["scores"]["Standard_D2s_v3"] == "High"
+        assert data["scores"]["Standard_D4s_v3"] == "Medium"
+        assert data["errors"] == []
+
+    @pytest.mark.anyio()
+    async def test_passes_instance_count_and_tenant(self, _mock_credential):
+        with patch(
+            "az_mapping.azure_api.get_spot_placement_scores",
+            return_value={"scores": {}, "errors": []},
+        ) as mock_fn:
+            _, _ = await mcp.call_tool(
+                "get_spot_scores",
+                {
+                    "region": "westeurope",
+                    "subscription_id": "sub-2",
+                    "vm_sizes": ["Standard_E4s_v4"],
+                    "instance_count": 10,
+                    "tenant_id": "tid-x",
+                },
+            )
+
+        mock_fn.assert_called_once_with(
+            "westeurope",
+            "sub-2",
+            ["Standard_E4s_v4"],
+            10,
+            "tid-x",
+        )
