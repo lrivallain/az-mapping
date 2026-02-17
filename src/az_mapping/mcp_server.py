@@ -25,6 +25,7 @@ import logging
 from mcp.server.fastmcp import FastMCP
 
 from az_mapping import azure_api
+from az_mapping.services.capacity_confidence import compute_capacity_confidence
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +186,26 @@ def get_sku_availability(
     azure_api.enrich_skus_with_quotas(result, region, subscription_id, tenant_id)
     if include_prices:
         azure_api.enrich_skus_with_prices(result, region, currency_code)
+
+    # Compute Deployment Confidence Score for each SKU
+    for sku in result:
+        caps = sku.get("capabilities", {})
+        quota = sku.get("quota", {})
+        pricing = sku.get("pricing", {})
+        try:
+            vcpus = int(caps.get("vCPUs", 0))
+        except (TypeError, ValueError):
+            vcpus = None
+        remaining = quota.get("remaining")
+        sku["confidence"] = compute_capacity_confidence(
+            vcpus=vcpus,
+            zones_supported_count=len(sku.get("zones", [])),
+            restrictions_present=len(sku.get("restrictions", [])) > 0,
+            quota_remaining_vcpu=remaining,
+            paygo_price=pricing.get("paygo") if pricing else None,
+            spot_price=pricing.get("spot") if pricing else None,
+        )
+
     return json.dumps(result, indent=2)
 
 
@@ -224,6 +245,8 @@ def get_sku_pricing_detail(
     region: str,
     sku_name: str,
     currency_code: str = "USD",
+    subscription_id: str | None = None,
+    tenant_id: str | None = None,
 ) -> str:
     """Get detailed Linux pricing for a single VM SKU.
 
@@ -232,10 +255,20 @@ def get_sku_pricing_detail(
 
     All prices are **per hour, Linux only**.
 
+    When ``subscription_id`` is provided, the response also includes a
+    ``profile`` object with full VM capabilities (compute, storage, network),
+    deployment info (zones, restrictions, HyperV generation) and more.
+
     Args:
         region: Azure region name (e.g. ``swedencentral``).
         sku_name: ARM SKU name (e.g. ``Standard_D2s_v5``).
         currency_code: ISO 4217 currency code (default: ``"USD"``).
+        subscription_id: Optional subscription ID to include VM profile data.
+        tenant_id: Optional tenant ID to scope the profile query.
     """
     result = azure_api.get_sku_pricing_detail(region, sku_name, currency_code)
+    if subscription_id:
+        profile = azure_api.get_sku_profile(region, subscription_id, sku_name, tenant_id)
+        if profile is not None:
+            result["profile"] = profile
     return json.dumps(result, indent=2)

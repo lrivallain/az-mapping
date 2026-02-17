@@ -286,6 +286,43 @@ class TestMcpGetSkuAvailability:
         mock_enrich.assert_called_once_with(mock_skus, "eastus", "EUR")
 
     @pytest.mark.anyio()
+    async def test_includes_confidence_score(self, _mock_credential):
+        """SKUs include a deployment confidence score."""
+        mock_skus = [
+            {
+                "name": "Standard_D2s_v3",
+                "tier": "Standard",
+                "size": "D2s_v3",
+                "family": "standardDSv3Family",
+                "zones": ["1", "2", "3"],
+                "restrictions": [],
+                "capabilities": {"vCPUs": "2", "MemoryGB": "8"},
+            }
+        ]
+        mock_usages = [
+            {
+                "currentValue": 4,
+                "limit": 50,
+                "name": {"value": "standardDSv3Family"},
+                "unit": "Count",
+            }
+        ]
+        with (
+            patch("az_mapping.azure_api.get_skus", return_value=mock_skus),
+            patch("az_mapping.azure_api.get_compute_usages", return_value=mock_usages),
+        ):
+            content, _ = await mcp.call_tool(
+                "get_sku_availability",
+                {"region": "eastus", "subscription_id": "sub-1"},
+            )
+
+        data = json.loads(content[0].text)
+        conf = data[0]["confidence"]
+        assert "score" in conf
+        assert "label" in conf
+        assert 0 <= conf["score"] <= 100
+
+    @pytest.mark.anyio()
     async def test_no_pricing_by_default(self, _mock_credential):
         """Pricing enrichment is not called when include_prices is omitted."""
         with (
@@ -414,3 +451,56 @@ class TestMcpGetSkuPricingDetail:
             )
 
         mock_fn.assert_called_once_with("eastus", "Standard_D4s_v3", "EUR")
+
+    @pytest.mark.anyio()
+    async def test_includes_profile_when_subscription_provided(self, _mock_credential):
+        """Profile is included when subscription_id is provided."""
+        mock_pricing = {"skuName": "Standard_D2s_v5", "paygo": 0.1}
+        mock_profile = {
+            "compute": {"vCPUs": 2, "memoryGB": 8},
+            "zones": ["1", "2", "3"],
+        }
+        with (
+            patch(
+                "az_mapping.azure_api.get_sku_pricing_detail",
+                return_value=mock_pricing,
+            ),
+            patch(
+                "az_mapping.azure_api.get_sku_profile",
+                return_value=mock_profile,
+            ) as mock_prof,
+        ):
+            content, _ = await mcp.call_tool(
+                "get_sku_pricing_detail",
+                {
+                    "region": "eastus",
+                    "sku_name": "Standard_D2s_v5",
+                    "subscription_id": "sub-1",
+                    "tenant_id": "tid-x",
+                },
+            )
+
+        mock_prof.assert_called_once_with("eastus", "sub-1", "Standard_D2s_v5", "tid-x")
+        data = json.loads(content[0].text)
+        assert "profile" in data
+        assert data["profile"]["compute"]["vCPUs"] == 2
+
+    @pytest.mark.anyio()
+    async def test_no_profile_without_subscription(self, _mock_credential):
+        """Profile is not fetched when subscription_id is omitted."""
+        mock_pricing = {"skuName": "Standard_D2s_v5", "paygo": 0.1}
+        with (
+            patch(
+                "az_mapping.azure_api.get_sku_pricing_detail",
+                return_value=mock_pricing,
+            ),
+            patch("az_mapping.azure_api.get_sku_profile") as mock_prof,
+        ):
+            content, _ = await mcp.call_tool(
+                "get_sku_pricing_detail",
+                {"region": "eastus", "sku_name": "Standard_D2s_v5"},
+            )
+
+        mock_prof.assert_not_called()
+        data = json.loads(content[0].text)
+        assert "profile" not in data
