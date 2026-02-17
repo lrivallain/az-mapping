@@ -12,6 +12,8 @@ let tenants = [];                // [{id, name}]
 let lastMappingData = null;      // cached result from /api/mappings
 let selectedSkuSubscription = null; // subscription selected for SKU loading
 let lastSkuData = null;          // cached SKU data
+let skuSortColumn = null;        // current SKU table sort column
+let skuSortAsc = true;           // sort direction
 
 // ---------------------------------------------------------------------------
 // Theme management
@@ -479,6 +481,8 @@ function onRegionChange() {
 
 function resetSkuSection() {
     lastSkuData = null;
+    skuSortColumn = null;
+    skuSortAsc = true;
     document.getElementById("sku-empty").style.display = "block";
     document.getElementById("sku-table-container").style.display = "none";
     document.getElementById("sku-loading").style.display = "none";
@@ -1167,6 +1171,34 @@ async function loadSkus() {
     }
 }
 
+function skuSortIndicator(col) {
+    if (skuSortColumn !== col) return "";
+    return skuSortAsc ? " ▲" : " ▼";
+}
+
+function onSkuSort(col, subscriptionName) {
+    if (skuSortColumn === col) {
+        skuSortAsc = !skuSortAsc;
+    } else {
+        skuSortColumn = col;
+        skuSortAsc = true;
+    }
+    renderSkuTable(lastSkuData, subscriptionName);
+}
+
+function skuSortValue(sku, col) {
+    switch (col) {
+        case "name":     return (sku.name || "").toLowerCase();
+        case "family":   return (sku.family || "").toLowerCase();
+        case "vCPUs":    return parseFloat(sku.capabilities.vCPUs || "0") || 0;
+        case "memory":   return parseFloat(sku.capabilities.MemoryGB || "0") || 0;
+        case "qLimit":   { const q = sku.quota || {}; return q.limit != null ? q.limit : -1; }
+        case "qUsed":    { const q = sku.quota || {}; return q.used  != null ? q.used  : -1; }
+        case "qRemain":  { const q = sku.quota || {}; return q.remaining != null ? q.remaining : -1; }
+        default:         return 0;
+    }
+}
+
 function renderSkuTable(skus, subscriptionName) {
     const container = document.getElementById("sku-table-container");
     const filterInput = document.getElementById("sku-filter");
@@ -1179,7 +1211,7 @@ function renderSkuTable(skus, subscriptionName) {
     
     // Apply filter
     const filterText = filterInput.value.toLowerCase();
-    const filteredSkus = skus.filter(sku => 
+    let filteredSkus = skus.filter(sku => 
         !filterText || sku.name.toLowerCase().includes(filterText)
     );
     
@@ -1189,15 +1221,30 @@ function renderSkuTable(skus, subscriptionName) {
         return;
     }
     
+    // Apply sorting
+    if (skuSortColumn) {
+        filteredSkus = [...filteredSkus].sort((a, b) => {
+            const va = skuSortValue(a, skuSortColumn);
+            const vb = skuSortValue(b, skuSortColumn);
+            let cmp = 0;
+            if (typeof va === "string") cmp = va.localeCompare(vb);
+            else cmp = va - vb;
+            return skuSortAsc ? cmp : -cmp;
+        });
+    }
+    
     // Get physical zone mappings using helper function
     const subscriptionId = selectedSkuSubscription || [...selectedSubscriptions][0];
     const physicalZoneMap = getPhysicalZoneMap(subscriptionId);
     
     // Determine all logical zones from SKUs
-    const allLogicalZones = [...new Set(filteredSkus.flatMap(s => s.zones))].sort();
+    const allLogicalZones = [...new Set(skus.flatMap(s => s.zones))].sort();
     
     // Map to physical zones
     const physicalZones = allLogicalZones.map(lz => physicalZoneMap[lz] || `Zone ${lz}`);
+    
+    // Escaped subscription name for onclick attribute
+    const escapedSubForAttr = subscriptionName.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
     
     // Build table with subscription context
     let html = `<div style="margin-bottom: 0.75rem; padding: 0.5rem; background: var(--azure-light); border-radius: 6px; font-size: 0.875rem;">
@@ -1205,10 +1252,20 @@ function renderSkuTable(skus, subscriptionName) {
     </div>`;
     html += '<table class="sku-table">';
     html += "<thead><tr>";
-    html += "<th>SKU Name</th>";
-    html += "<th>Family</th>";
-    html += "<th>vCPUs</th>";
-    html += "<th>Memory (GB)</th>";
+    
+    const sortCols = [
+        ["name",    "SKU Name"],
+        ["family",  "Family"],
+        ["vCPUs",   "vCPUs"],
+        ["memory",  "Memory (GB)"],
+        ["qLimit",  "Quota Limit"],
+        ["qUsed",   "Quota Used"],
+        ["qRemain", "Quota Remaining"],
+    ];
+    sortCols.forEach(([col, label]) => {
+        const active = skuSortColumn === col ? ' class="sort-active"' : '';
+        html += `<th${active} style="cursor:pointer" onclick="onSkuSort('${col}','${escapedSubForAttr}')">${label}${skuSortIndicator(col)}</th>`;
+    });
     
     // Render headers with zone number and physical zone name (with line break)
     allLogicalZones.forEach((lz, index) => {
@@ -1224,6 +1281,11 @@ function renderSkuTable(skus, subscriptionName) {
         html += `<td>${escapeHtml(sku.family || "—")}</td>`;
         html += `<td>${escapeHtml(sku.capabilities.vCPUs || "—")}</td>`;
         html += `<td>${escapeHtml(sku.capabilities.MemoryGB || "—")}</td>`;
+        
+        const quota = sku.quota || {};
+        html += `<td>${quota.limit != null ? quota.limit : "—"}</td>`;
+        html += `<td>${quota.used != null ? quota.used : "—"}</td>`;
+        html += `<td>${quota.remaining != null ? quota.remaining : "—"}</td>`;
         
         allLogicalZones.forEach(logicalZone => {
             const isAvailable = sku.zones.includes(logicalZone);
@@ -1263,11 +1325,13 @@ function exportSkuCSV() {
     const zoneHeaders = allLogicalZones.map((lz, index) => 
         `Zone ${lz}\n${physicalZones[index]}`
     );
-    const headers = ["SKU Name", "Family", "vCPUs", "Memory (GB)", 
+    const headers = ["SKU Name", "Family", "vCPUs", "Memory (GB)",
+        "Quota Limit", "Quota Used", "Quota Remaining",
         ...zoneHeaders];
     
     // Data rows
     const rows = lastSkuData.map(sku => {
+        const quota = sku.quota || {};
         const zoneCols = allLogicalZones.map(logicalZone => {
             const isAvailable = sku.zones.includes(logicalZone);
             const isRestricted = sku.restrictions.includes(logicalZone);
@@ -1282,6 +1346,9 @@ function exportSkuCSV() {
             sku.family || "",
             sku.capabilities.vCPUs || "",
             sku.capabilities.MemoryGB || "",
+            quota.limit != null ? quota.limit : "",
+            quota.used != null ? quota.used : "",
+            quota.remaining != null ? quota.remaining : "",
             ...zoneCols
         ];
     });

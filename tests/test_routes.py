@@ -1,6 +1,10 @@
 """Tests for the az-mapping FastAPI routes."""
 
+import json
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 # ---------------------------------------------------------------------------
 # GET /
@@ -629,3 +633,146 @@ class TestGetSkus:
 
         data = resp.json()
         assert len(data) == 3
+
+
+# ---------------------------------------------------------------------------
+# GET /api/skus – quota enrichment
+# ---------------------------------------------------------------------------
+
+
+class TestGetSkusQuotas:
+    """Tests for quota enrichment in the /api/skus endpoint."""
+
+    def _load_fixture(self, name: str) -> dict:
+        return json.loads((FIXTURES / name).read_text())
+
+    def _mock_get_for(self, sku_response: dict, usages_response: dict):
+        """Return a side_effect callback that routes by URL."""
+
+        def _dispatch(url, **kwargs):
+            resp = MagicMock()
+            resp.raise_for_status.return_value = None
+            resp.status_code = 200
+            if "/Microsoft.Compute/skus" in url:
+                resp.json.return_value = sku_response
+            elif "/usages" in url:
+                resp.json.return_value = usages_response
+            else:
+                resp.json.return_value = {"value": []}
+            return resp
+
+        return _dispatch
+
+    def test_includes_matching_quota_info(self, client):
+        """SKUs get quota data when family matches a usage entry."""
+        sku_resp = self._load_fixture("compute_skus_sample.json")
+        usages_resp = self._load_fixture("compute_usages_francecentral.json")
+
+        with patch(
+            "az_mapping.azure_api.requests.get",
+            side_effect=self._mock_get_for(sku_resp, usages_resp),
+        ):
+            resp = client.get("/api/skus?region=francecentral&subscriptionId=sub1")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        by_name = {s["name"]: s for s in data}
+
+        # standardDSv3Family → limit 50, used 4, remaining 46
+        d2s = by_name["Standard_D2s_v3"]
+        assert d2s["quota"]["limit"] == 50
+        assert d2s["quota"]["used"] == 4
+        assert d2s["quota"]["remaining"] == 46
+
+        # standardESv4Family → limit 100, used 8, remaining 92
+        e8s = by_name["Standard_E8s_v4"]
+        assert e8s["quota"]["limit"] == 100
+        assert e8s["quota"]["used"] == 8
+        assert e8s["quota"]["remaining"] == 92
+
+    def test_quota_unknown_when_no_family_match(self, client):
+        """SKU is returned with null quota when family has no matching usage."""
+        sku_resp = self._load_fixture("compute_skus_sample.json")
+        usages_resp = self._load_fixture("compute_usages_francecentral.json")
+
+        with patch(
+            "az_mapping.azure_api.requests.get",
+            side_effect=self._mock_get_for(sku_resp, usages_resp),
+        ):
+            resp = client.get("/api/skus?region=francecentral&subscriptionId=sub1")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        by_name = {s["name"]: s for s in data}
+
+        # standardFSv2Family has no matching usage entry
+        f2s = by_name["Standard_F2s_v2"]
+        assert f2s["quota"]["limit"] is None
+        assert f2s["quota"]["used"] is None
+        assert f2s["quota"]["remaining"] is None
+
+    def test_quota_on_403_returns_skus_with_unknown_quotas(self, client):
+        """When usages API returns 403, SKUs are still returned with unknown quotas."""
+        sku_resp = self._load_fixture("compute_skus_sample.json")
+
+        def _dispatch(url, **kwargs):
+            resp = MagicMock()
+            resp.raise_for_status.return_value = None
+            if "/Microsoft.Compute/skus" in url:
+                resp.json.return_value = sku_resp
+                resp.status_code = 200
+            elif "/usages" in url:
+                resp.status_code = 403
+            else:
+                resp.json.return_value = {"value": []}
+                resp.status_code = 200
+            return resp
+
+        with patch("az_mapping.azure_api.requests.get", side_effect=_dispatch):
+            resp = client.get("/api/skus?region=francecentral&subscriptionId=sub1")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 3
+        for sku in data:
+            assert sku["quota"]["limit"] is None
+            assert sku["quota"]["used"] is None
+            assert sku["quota"]["remaining"] is None
+
+    def test_quota_on_429_retries_and_succeeds(self, client):
+        """When usages API returns 429 once then succeeds, quotas are populated."""
+        sku_resp = self._load_fixture("compute_skus_sample.json")
+        usages_resp = self._load_fixture("compute_usages_francecentral.json")
+
+        call_count = {"usages": 0}
+
+        def _dispatch(url, **kwargs):
+            resp = MagicMock()
+            resp.raise_for_status.return_value = None
+            if "/Microsoft.Compute/skus" in url:
+                resp.json.return_value = sku_resp
+                resp.status_code = 200
+            elif "/usages" in url:
+                call_count["usages"] += 1
+                if call_count["usages"] == 1:
+                    resp.status_code = 429
+                    resp.headers = {"Retry-After": "0"}
+                else:
+                    resp.status_code = 200
+                    resp.json.return_value = usages_resp
+            else:
+                resp.json.return_value = {"value": []}
+                resp.status_code = 200
+            return resp
+
+        with (
+            patch("az_mapping.azure_api.requests.get", side_effect=_dispatch),
+            patch("time.sleep"),
+        ):
+            resp = client.get("/api/skus?region=francecentral&subscriptionId=sub1")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        by_name = {s["name"]: s for s in data}
+        assert by_name["Standard_D2s_v3"]["quota"]["limit"] == 50
+        assert call_count["usages"] == 2

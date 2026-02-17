@@ -188,20 +188,20 @@ async def get_skus(
         )
 
     try:
-        return JSONResponse(
-            azure_api.get_skus(
-                region,
-                subscriptionId,
-                tenantId,
-                resourceType,
-                name=name,
-                family=family,
-                min_vcpus=minVcpus,
-                max_vcpus=maxVcpus,
-                min_memory_gb=minMemoryGB,
-                max_memory_gb=maxMemoryGB,
-            )
+        skus = azure_api.get_skus(
+            region,
+            subscriptionId,
+            tenantId,
+            resourceType,
+            name=name,
+            family=family,
+            min_vcpus=minVcpus,
+            max_vcpus=maxVcpus,
+            min_memory_gb=minMemoryGB,
+            max_memory_gb=maxMemoryGB,
         )
+        azure_api.enrich_skus_with_quotas(skus, region, subscriptionId, tenantId)
+        return JSONResponse(skus)
     except Exception as exc:
         logger.exception("Failed to fetch SKUs")
         return JSONResponse({"error": str(exc)}, status_code=500)

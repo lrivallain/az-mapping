@@ -140,6 +140,12 @@ def get_sku_availability(
     - **restricted**: SKU is listed but restricted (cannot be deployed)
     - **unavailable**: SKU is not offered in that zone
 
+    Each SKU also includes a ``quota`` object with per-family vCPU quota:
+    - **limit**: total vCPU quota for the family
+    - **used**: currently consumed vCPUs
+    - **remaining**: available vCPUs (limit − used)
+    Values are ``null`` when the quota could not be resolved.
+
     Args:
         region: Azure region name (e.g. ``eastus``).
         subscription_id: Subscription ID to query.
@@ -167,4 +173,5 @@ def get_sku_availability(
         min_memory_gb=min_memory_gb,
         max_memory_gb=max_memory_gb,
     )
+    azure_api.enrich_skus_with_quotas(result, region, subscription_id, tenant_id)
     return json.dumps(result, indent=2)

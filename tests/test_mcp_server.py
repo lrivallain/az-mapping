@@ -139,7 +139,10 @@ class TestMcpGetSkuAvailability:
                 "capabilities": {"vCPUs": "2", "MemoryGB": "8"},
             }
         ]
-        with patch("az_mapping.azure_api.get_skus", return_value=mock_data):
+        with (
+            patch("az_mapping.azure_api.get_skus", return_value=mock_data),
+            patch("az_mapping.azure_api.get_compute_usages", return_value=[]),
+        ):
             content, _ = await mcp.call_tool(
                 "get_sku_availability",
                 {"region": "eastus", "subscription_id": "sub-1"},
@@ -149,10 +152,14 @@ class TestMcpGetSkuAvailability:
         assert len(data) == 1
         assert data[0]["name"] == "Standard_D2s_v3"
         assert data[0]["capabilities"]["vCPUs"] == "2"
+        assert data[0]["quota"]["limit"] is None
 
     @pytest.mark.anyio()
     async def test_passes_resource_type(self, _mock_credential):
-        with patch("az_mapping.azure_api.get_skus", return_value=[]) as mock_fn:
+        with (
+            patch("az_mapping.azure_api.get_skus", return_value=[]) as mock_fn,
+            patch("az_mapping.azure_api.get_compute_usages", return_value=[]),
+        ):
             _, _ = await mcp.call_tool(
                 "get_sku_availability",
                 {
@@ -177,7 +184,10 @@ class TestMcpGetSkuAvailability:
 
     @pytest.mark.anyio()
     async def test_passes_sku_filters(self, _mock_credential):
-        with patch("az_mapping.azure_api.get_skus", return_value=[]) as mock_fn:
+        with (
+            patch("az_mapping.azure_api.get_skus", return_value=[]) as mock_fn,
+            patch("az_mapping.azure_api.get_compute_usages", return_value=[]),
+        ):
             _, _ = await mcp.call_tool(
                 "get_sku_availability",
                 {
@@ -204,3 +214,42 @@ class TestMcpGetSkuAvailability:
             min_memory_gb=4.0,
             max_memory_gb=32.0,
         )
+
+    @pytest.mark.anyio()
+    async def test_includes_quota_info(self, _mock_credential):
+        """SKUs include quota data when usages match the family."""
+        mock_skus = [
+            {
+                "name": "Standard_D2s_v3",
+                "tier": "Standard",
+                "size": "D2s_v3",
+                "family": "standardDSv3Family",
+                "zones": ["1", "2", "3"],
+                "restrictions": [],
+                "capabilities": {"vCPUs": "2", "MemoryGB": "8"},
+            }
+        ]
+        mock_usages = [
+            {
+                "currentValue": 4,
+                "limit": 50,
+                "name": {
+                    "value": "standardDSv3Family",
+                    "localizedValue": "Standard DSv3 Family vCPUs",
+                },
+                "unit": "Count",
+            }
+        ]
+        with (
+            patch("az_mapping.azure_api.get_skus", return_value=mock_skus),
+            patch("az_mapping.azure_api.get_compute_usages", return_value=mock_usages),
+        ):
+            content, _ = await mcp.call_tool(
+                "get_sku_availability",
+                {"region": "eastus", "subscription_id": "sub-1"},
+            )
+
+        data = json.loads(content[0].text)
+        assert data[0]["quota"]["limit"] == 50
+        assert data[0]["quota"]["used"] == 4
+        assert data[0]["quota"]["remaining"] == 46

@@ -880,6 +880,16 @@ body {
     padding: 0.6rem 0.85rem;
     border-bottom: 2px solid var(--azure-blue);
     white-space: nowrap;
+    user-select: none;
+}
+
+.sku-table th[style*="cursor:pointer"]:hover {
+    background: var(--azure-blue);
+    color: #fff;
+}
+
+.sku-table th.sort-active {
+    color: var(--azure-blue);
 }
 
 .sku-table td {

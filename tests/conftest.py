@@ -23,3 +23,13 @@ def _mock_credential():
     with patch("az_mapping.azure_api.credential") as cred:
         cred.get_token.return_value = mock_token
         yield cred
+
+
+@pytest.fixture(autouse=True)
+def _clear_usage_cache():
+    """Clear the compute usages cache between tests."""
+    from az_mapping.azure_api import _usage_cache
+
+    _usage_cache.clear()
+    yield
+    _usage_cache.clear()
