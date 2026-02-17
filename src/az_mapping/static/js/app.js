@@ -1574,7 +1574,10 @@ async function fetchPricingDetail() {
 
     try {
         const params = new URLSearchParams({ region, skuName, currencyCode: currency });
-        const data = await apiFetch(`/api/sku-pricing?${params}`);
+        const subId = selectedSkuSubscription || [...selectedSubscriptions][0];
+        if (subId) params.set("subscriptionId", subId);
+        const tqs = tenantQS("&");
+        const data = await apiFetch(`/api/sku-pricing?${params}${tqs}`);
         renderPricingDetail(data);
     } catch (err) {
         const content = document.getElementById("pricing-modal-content");
@@ -1609,8 +1612,122 @@ function renderPricingDetail(data) {
     });
     html += "</tbody></table>";
 
+    // VM Profile section
+    if (data.profile) {
+        html += renderVmProfile(data.profile);
+    }
+
     content.innerHTML = html;
     content.style.display = "block";
+}
+
+function renderVmProfile(profile) {
+    const caps = profile.capabilities || {};
+    const zones = profile.zones || [];
+    const restrictions = profile.restrictions || [];
+
+    function badge(val, trueLabel, falseLabel) {
+        if (val === true) return `<span class="vm-badge vm-badge-yes">${escapeHtml(trueLabel || "Yes")}</span>`;
+        if (val === false) return `<span class="vm-badge vm-badge-no">${escapeHtml(falseLabel || "No")}</span>`;
+        return `<span class="vm-badge vm-badge-unknown">—</span>`;
+    }
+
+    function row(label, value) {
+        return `<div class="vm-profile-row"><span class="vm-profile-label">${escapeHtml(label)}</span><span class="vm-profile-value">${value}</span></div>`;
+    }
+
+    function val(v, suffix) {
+        if (v == null) return '<span class="vm-badge vm-badge-unknown">—</span>';
+        return escapeHtml(String(v) + (suffix || ""));
+    }
+
+    // Format bytes/sec to MB/s
+    function bytesToMBs(v) {
+        if (v == null) return '<span class="vm-badge vm-badge-unknown">—</span>';
+        const mb = Number(v) / (1024 * 1024);
+        return escapeHtml(mb.toFixed(0) + " MB/s");
+    }
+
+    // Format bytes to GB
+    function bytesToGB(v) {
+        if (v == null) return '<span class="vm-badge vm-badge-unknown">—</span>';
+        const gb = Number(v) / (1024 * 1024 * 1024);
+        return escapeHtml(gb.toFixed(0) + " GB");
+    }
+
+    // Format Mbps to Gbps
+    function mbpsToGbps(v) {
+        if (v == null) return '<span class="vm-badge vm-badge-unknown">—</span>';
+        const gbps = Number(v) / 1000;
+        return escapeHtml(gbps >= 1 ? gbps.toFixed(1) + " Gbps" : v + " Mbps");
+    }
+
+    // Restrictions summary
+    let restrictionSummary = '<span class="vm-badge vm-badge-yes">None</span>';
+    if (restrictions.length > 0) {
+        const parts = restrictions.map(r => {
+            const rType = r.type || "Unknown";
+            const reason = r.reasonCode || "";
+            const rZones = (r.zones || []).join(", ");
+            let desc = rType;
+            if (reason) desc += ` (${reason})`;
+            if (rZones) desc += ` zones: ${rZones}`;
+            return escapeHtml(desc);
+        });
+        restrictionSummary = `<span class="vm-badge vm-badge-limited">${parts.join("; ")}</span>`;
+    }
+
+    let html = '<div class="vm-profile-section">';
+    html += '<h4 class="vm-profile-title">VM Profile</h4>';
+    html += '<div class="vm-profile-grid">';
+
+    // Compute card
+    html += '<div class="vm-profile-card">';
+    html += '<div class="vm-profile-card-title">Compute</div>';
+    html += row("vCPUs", val(caps.vCPUs));
+    html += row("Memory", val(caps.MemoryGB, " GB"));
+    html += row("Architecture", val(caps.CpuArchitectureType));
+    const gpuCount = caps.GPUs != null ? caps.GPUs : caps.GpuCount;
+    html += row("GPUs", val(gpuCount));
+    html += '</div>';
+
+    // Deployment card
+    html += '<div class="vm-profile-card">';
+    html += '<div class="vm-profile-card-title">Deployment</div>';
+    const zonesStr = zones.length > 0 ? zones.join(", ") : "None";
+    html += row("Zones", val(zonesStr));
+    html += row("HyperV Gen.", val(caps.HyperVGenerations));
+    html += row("Encryption at Host", badge(caps.EncryptionAtHostSupported));
+    html += row("Confidential", val(caps.ConfidentialComputingType || (caps.ConfidentialComputingType === false ? "None" : null)));
+    html += row("Restrictions", restrictionSummary);
+    html += '</div>';
+
+    // Storage card
+    html += '<div class="vm-profile-card">';
+    html += '<div class="vm-profile-card-title">Storage</div>';
+    html += row("Premium IO", badge(caps.PremiumIO));
+    html += row("Ultra SSD", badge(caps.UltraSSDAvailable));
+    html += row("Ephemeral OS Disk", badge(caps.EphemeralOSDiskSupported));
+    html += row("Max Data Disks", val(caps.MaxDataDiskCount));
+    html += row("Uncached Disk IOPS", val(caps.UncachedDiskIOPS));
+    html += row("Uncached Disk BW", bytesToMBs(caps.UncachedDiskBytesPerSecond));
+    html += row("Cached Disk Size", bytesToGB(caps.CachedDiskBytes));
+    html += row("Write Accelerator", val(caps.MaxWriteAcceleratorDisksAllowed));
+    html += row("Temp Disk", val(caps.TempDiskSizeInGiB, " GiB"));
+    html += '</div>';
+
+    // Network card
+    html += '<div class="vm-profile-card">';
+    html += '<div class="vm-profile-card-title">Network</div>';
+    html += row("Accelerated Net.", badge(caps.AcceleratedNetworkingEnabled));
+    const nics = caps.MaxNetworkInterfaces != null ? caps.MaxNetworkInterfaces : caps.MaximumNetworkInterfaces;
+    html += row("Max NICs", val(nics));
+    html += row("Max Bandwidth", mbpsToGbps(caps.MaxBandwidthMbps));
+    html += row("RDMA", badge(caps.RdmaEnabled));
+    html += '</div>';
+
+    html += '</div></div>';
+    return html;
 }
 
 document.addEventListener("keydown", (e) => {

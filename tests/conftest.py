@@ -55,3 +55,13 @@ def _clear_price_cache():
     yield
     _price_cache.clear()
     _detail_price_cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def _clear_sku_profile_cache():
+    """Clear the SKU profile cache between tests."""
+    from az_mapping.azure_api import _sku_profile_cache
+
+    _sku_profile_cache.clear()
+    yield
+    _sku_profile_cache.clear()

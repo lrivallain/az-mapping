@@ -1508,3 +1508,196 @@ class TestGetSkuPricingDetail:
 
         resp = client.get("/api/sku-pricing?skuName=Standard_D2s_v3")
         assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# VM profile via GET /api/sku-pricing?subscriptionId=...
+# ---------------------------------------------------------------------------
+
+
+class TestSkuProfile:
+    """Tests for VM profile enrichment on /api/sku-pricing."""
+
+    _SAMPLE_SKU = {
+        "name": "Standard_D2s_v3",
+        "resourceType": "virtualMachines",
+        "locationInfo": [
+            {
+                "location": "eastus",
+                "zones": ["3", "1", "2"],
+            }
+        ],
+        "capabilities": [
+            {"name": "vCPUs", "value": "2"},
+            {"name": "MemoryGB", "value": "8"},
+            {"name": "PremiumIO", "value": "True"},
+            {"name": "AcceleratedNetworkingEnabled", "value": "True"},
+            {"name": "MaxDataDiskCount", "value": "4"},
+            {"name": "UncachedDiskIOPS", "value": "3200"},
+            {"name": "UncachedDiskBytesPerSecond", "value": "48000000"},
+            {"name": "EphemeralOSDiskSupported", "value": "False"},
+            {"name": "HyperVGenerations", "value": "V1,V2"},
+            {"name": "CpuArchitectureType", "value": "x64"},
+        ],
+        "restrictions": [
+            {
+                "type": "Zone",
+                "reasonCode": "NotAvailableForSubscription",
+                "restrictionInfo": {
+                    "zones": ["3"],
+                    "locations": ["eastus"],
+                },
+            }
+        ],
+    }
+
+    _RETAIL_ITEM = {
+        "armSkuName": "Standard_D2s_v3",
+        "skuName": "D2s v3",
+        "retailPrice": 0.096,
+        "type": "Consumption",
+        "productName": "Virtual Machines DSv3 Series",
+        "serviceName": "Virtual Machines",
+    }
+
+    @staticmethod
+    def _mock_dispatch(arm_sku_value, retail_items):
+        """Return a side_effect dispatching ARM SKU vs retail URLs."""
+
+        def _dispatch(url, **kwargs):
+            resp = MagicMock()
+            resp.raise_for_status.return_value = None
+            resp.status_code = 200
+            if "/Microsoft.Compute/skus" in url:
+                resp.json.return_value = {
+                    "value": arm_sku_value,
+                    "nextLink": None,
+                }
+            elif "prices.azure.com" in url:
+                resp.json.return_value = {
+                    "Items": retail_items,
+                    "NextPageLink": None,
+                    "Count": len(retail_items),
+                }
+            else:
+                resp.json.return_value = {"value": []}
+            return resp
+
+        return _dispatch
+
+    def test_profile_returned_with_subscription_id(self, client):
+        """When subscriptionId is provided, the response includes profile."""
+        with patch(
+            "az_mapping.azure_api.requests.get",
+            side_effect=self._mock_dispatch([self._SAMPLE_SKU], [self._RETAIL_ITEM]),
+        ):
+            resp = client.get(
+                "/api/sku-pricing?region=eastus&skuName=Standard_D2s_v3&subscriptionId=sub-1"
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "profile" in data
+        profile = data["profile"]
+        assert profile["zones"] == ["1", "2", "3"]
+        assert profile["capabilities"]["vCPUs"] == 2
+        assert profile["capabilities"]["MemoryGB"] == 8
+        assert profile["capabilities"]["PremiumIO"] is True
+        assert profile["capabilities"]["EphemeralOSDiskSupported"] is False
+        assert profile["capabilities"]["HyperVGenerations"] == "V1,V2"
+        assert len(profile["restrictions"]) == 1
+        assert profile["restrictions"][0]["reasonCode"] == "NotAvailableForSubscription"
+        assert profile["restrictions"][0]["zones"] == ["3"]
+
+    def test_no_profile_without_subscription_id(self, client):
+        """Without subscriptionId, profile key is absent."""
+        retail_resp = MagicMock()
+        retail_resp.status_code = 200
+        retail_resp.json.return_value = {
+            "Items": [self._RETAIL_ITEM],
+            "NextPageLink": None,
+            "Count": 1,
+        }
+
+        with patch(
+            "az_mapping.azure_api.requests.get",
+            return_value=retail_resp,
+        ):
+            resp = client.get("/api/sku-pricing?region=eastus&skuName=Standard_D2s_v3")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "profile" not in data
+
+    def test_profile_none_when_sku_not_found(self, client):
+        """When SKU doesn't exist, profile key should be absent."""
+        with patch(
+            "az_mapping.azure_api.requests.get",
+            side_effect=self._mock_dispatch([], [self._RETAIL_ITEM]),
+        ):
+            resp = client.get(
+                "/api/sku-pricing?region=eastus&skuName=Standard_NONEXIST&subscriptionId=sub-1"
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "profile" not in data
+
+    def test_profile_no_restrictions(self, client):
+        """SKU with empty restrictions list returns empty list."""
+        sku = {**self._SAMPLE_SKU, "restrictions": []}
+        with patch(
+            "az_mapping.azure_api.requests.get",
+            side_effect=self._mock_dispatch([sku], [self._RETAIL_ITEM]),
+        ):
+            resp = client.get(
+                "/api/sku-pricing?region=eastus&skuName=Standard_D2s_v3&subscriptionId=sub-1"
+            )
+
+        data = resp.json()
+        assert data["profile"]["restrictions"] == []
+
+    def test_profile_tenant_id_forwarded(self, client):
+        """tenantId parameter should be forwarded to get_sku_profile."""
+        with patch(
+            "az_mapping.azure_api.requests.get",
+            side_effect=self._mock_dispatch([self._SAMPLE_SKU], [self._RETAIL_ITEM]),
+        ):
+            resp = client.get(
+                "/api/sku-pricing?region=eastus&skuName=Standard_D2s_v3"
+                "&subscriptionId=sub-1&tenantId=tid-1"
+            )
+
+        assert resp.status_code == 200
+        assert "profile" in resp.json()
+
+    def test_capability_type_parsing(self, client):
+        """Capabilities are parsed to correct types (bool, int, float, str)."""
+        sku = {
+            "name": "Standard_D2s_v3",
+            "resourceType": "virtualMachines",
+            "locationInfo": [{"location": "eastus", "zones": []}],
+            "capabilities": [
+                {"name": "BoolTrue", "value": "True"},
+                {"name": "BoolFalse", "value": "False"},
+                {"name": "IntVal", "value": "42"},
+                {"name": "FloatVal", "value": "3.14"},
+                {"name": "StrVal", "value": "hello"},
+            ],
+            "restrictions": [],
+        }
+        with patch(
+            "az_mapping.azure_api.requests.get",
+            side_effect=self._mock_dispatch([sku], [self._RETAIL_ITEM]),
+        ):
+            resp = client.get(
+                "/api/sku-pricing?region=eastus&skuName=Standard_D2s_v3&subscriptionId=sub-1"
+            )
+
+        caps = resp.json()["profile"]["capabilities"]
+        assert caps["BoolTrue"] is True
+        assert caps["BoolFalse"] is False
+        assert caps["IntVal"] == 42
+        assert isinstance(caps["IntVal"], int)
+        assert caps["FloatVal"] == pytest.approx(3.14)
+        assert caps["StrVal"] == "hello"

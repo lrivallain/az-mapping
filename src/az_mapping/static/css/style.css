@@ -1098,7 +1098,7 @@ body {
 
 /* ---- Pricing Detail Modal ---- */
 .pricing-modal-dialog {
-    width: 480px;
+    width: 580px;
 }
 .pricing-modal-header {
     display: flex;
@@ -1173,6 +1173,81 @@ body {
     text-decoration-style: solid;
 }
 
+/* ---- VM Profile Section ---- */
+.vm-profile-section {
+    margin-top: 1rem;
+    border-top: 1px solid var(--border);
+    padding-top: 0.75rem;
+}
+.vm-profile-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--azure-dark);
+    margin: 0 0 0.5rem 0;
+}
+.vm-profile-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+.vm-profile-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.6rem 0.75rem;
+}
+.vm-profile-card-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--azure-blue);
+    margin-bottom: 0.35rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--border);
+}
+.vm-profile-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.15rem 0;
+    font-size: 0.8rem;
+    gap: 0.5rem;
+}
+.vm-profile-label {
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+.vm-profile-value {
+    font-weight: 500;
+    text-align: right;
+    word-break: break-word;
+}
+.vm-badge {
+    display: inline-block;
+    padding: 0.1rem 0.45rem;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.vm-badge-yes {
+    background: var(--success);
+    color: #fff;
+}
+.vm-badge-no {
+    background: var(--danger);
+    color: #fff;
+}
+.vm-badge-unknown {
+    background: var(--border);
+    color: var(--text-muted);
+}
+.vm-badge-limited {
+    background: var(--warning);
+    color: #1a1a1a;
+}
+
 /* Dark mode: SKU table header */
 [data-theme="dark"] .sku-table th {
     background: var(--azure-light);
@@ -1186,6 +1261,13 @@ body {
     background: var(--azure-light);
     color: #58a6ff;
 }
+[data-theme="dark"] .vm-profile-title,
+[data-theme="dark"] .vm-profile-card-title {
+    color: #58a6ff;
+}
+[data-theme="dark"] .vm-profile-card {
+    background: var(--card-bg);
+}
 
 @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .sku-table th {
@@ -1198,5 +1280,12 @@ body {
     :root:not([data-theme="light"]) .pricing-detail-table th {
         background: var(--azure-light);
         color: #58a6ff;
+    }
+    :root:not([data-theme="light"]) .vm-profile-title,
+    :root:not([data-theme="light"]) .vm-profile-card-title {
+        color: #58a6ff;
+    }
+    :root:not([data-theme="light"]) .vm-profile-card {
+        background: var(--card-bg);
     }
 }

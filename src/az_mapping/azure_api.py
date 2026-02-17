@@ -806,6 +806,111 @@ def enrich_skus_with_prices(
 
 
 # ---------------------------------------------------------------------------
+# SKU Profile – full capabilities & restrictions from ARM
+# ---------------------------------------------------------------------------
+
+_SKU_PROFILE_CACHE_TTL = 600  # 10 minutes
+_sku_profile_cache: dict[str, tuple[float, dict | None]] = {}
+
+
+def _parse_capability_value(value: str) -> str | bool | int | float:
+    """Convert an ARM capability string to an appropriate Python type."""
+    if value in ("True", "False"):
+        return value == "True"
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    try:
+        return float(value)
+    except ValueError:
+        pass
+    return value
+
+
+def get_sku_profile(
+    region: str,
+    subscription_id: str,
+    sku_name: str,
+    tenant_id: str | None = None,
+) -> dict | None:
+    """Return full capabilities, restrictions and zones for a single VM SKU.
+
+    Calls the ARM ``Microsoft.Compute/skus`` endpoint and returns::
+
+        {
+            "zones": ["1", "2", "3"],
+            "capabilities": { "vCPUs": 2, "MemoryGB": 8, ... },
+            "restrictions": [ { "type": ..., "reasonCode": ..., "zones": [...] } ],
+        }
+
+    Returns ``None`` when the SKU is not found in the region.
+    Results are cached for ``_SKU_PROFILE_CACHE_TTL`` seconds.
+    """
+    cache_key = f"profile:{subscription_id}:{region}:{sku_name}:{tenant_id or ''}"
+    now = time.monotonic()
+    cached = _sku_profile_cache.get(cache_key)
+    if cached is not None:
+        ts, data = cached
+        if now - ts < _SKU_PROFILE_CACHE_TTL:
+            return data
+
+    headers = _get_headers(tenant_id)
+    url = (
+        f"{AZURE_MGMT_URL}/subscriptions/{subscription_id}/providers/"
+        f"Microsoft.Compute/skus?api-version={AZURE_API_VERSION}"
+        f"&$filter=location eq '{region}'"
+    )
+
+    try:
+        all_skus = _paginate(url, headers, timeout=60)
+    except Exception:
+        logger.warning("Failed to fetch SKU profile for %s in %s", sku_name, region)
+        return None
+
+    for sku in all_skus:
+        if sku.get("name") == sku_name and sku.get("resourceType") == "virtualMachines":
+            # Zones
+            zones: list[str] = []
+            for loc_info in sku.get("locationInfo", []):
+                if loc_info.get("location", "").lower() == region.lower():
+                    zones = loc_info.get("zones", [])
+                    break
+
+            # Capabilities – all of them, parsed
+            capabilities: dict[str, str | bool | int | float] = {}
+            for cap in sku.get("capabilities", []):
+                cap_name = cap.get("name", "")
+                cap_value = cap.get("value", "")
+                if cap_name:
+                    capabilities[cap_name] = _parse_capability_value(cap_value)
+
+            # Restrictions – full details
+            restrictions: list[dict] = []
+            for restriction in sku.get("restrictions", []):
+                restrictions.append(
+                    {
+                        "type": restriction.get("type"),
+                        "reasonCode": restriction.get("reasonCode"),
+                        "zones": restriction.get("restrictionInfo", {}).get("zones", []),
+                        "locations": restriction.get("restrictionInfo", {}).get("locations", []),
+                    }
+                )
+
+            result: dict = {
+                "zones": sorted(zones),
+                "capabilities": capabilities,
+                "restrictions": restrictions,
+            }
+            _sku_profile_cache[cache_key] = (time.monotonic(), result)
+            return result
+
+    # SKU not found
+    _sku_profile_cache[cache_key] = (time.monotonic(), None)
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Detailed SKU pricing – PayGo, Spot, RI 1Y/3Y, Savings Plan 1Y/3Y
 # ---------------------------------------------------------------------------
 

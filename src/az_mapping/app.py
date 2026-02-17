@@ -265,14 +265,24 @@ async def get_sku_pricing(
     currencyCode: str = Query(  # noqa: N803
         "USD", description="ISO 4217 currency code."
     ),
+    subscriptionId: str | None = Query(  # noqa: N803
+        None, description="Subscription ID for VM profile data."
+    ),
+    tenantId: str | None = Query(None, description="Optional tenant ID."),  # noqa: N803
 ) -> JSONResponse:
     """Return detailed Linux pricing for a single VM SKU.
 
     Includes pay-as-you-go, Spot, Reserved Instance (1Y/3Y) and
-    Savings Plan (1Y/3Y) prices per hour.
+    Savings Plan (1Y/3Y) prices per hour.  When *subscriptionId* is
+    provided, also returns the full VM profile (capabilities,
+    restrictions, zones).
     """
     try:
         result = azure_api.get_sku_pricing_detail(region, skuName, currencyCode)
+        if subscriptionId:
+            profile = azure_api.get_sku_profile(region, subscriptionId, skuName, tenantId)
+            if profile is not None:
+                result["profile"] = profile
         return JSONResponse(result)
     except Exception as exc:
         logger.exception("Failed to fetch SKU pricing detail")
