@@ -70,6 +70,7 @@ az-mapping
 - **Table view** – comparison table with consistency indicators.
 - **SKU availability view** – shows VM SKU availability per physical zone with vCPU quota usage (limit / used / remaining) and CSV export.
 - **Spot Placement Scores** – evaluate the likelihood of Spot VM allocation (High / Medium / Low) per SKU for a given region and instance count, powered by the Azure Compute RP.
+- **Deployment Confidence Score** – a composite 0–100 score per SKU estimating deployment success probability, synthesised from quota headroom, Spot Placement Score, availability zone breadth, restrictions, and price pressure signals. Missing signals are automatically excluded with weight renormalisation. The score updates live when Spot Placement Scores arrive.
 - **Export** – download the graph as PNG or the tables as CSV.
 - **Shareable URLs** – filters are reflected in the URL; reload or share a link to restore the exact view.
 - **MCP server** – expose all capabilities as MCP tools for AI agents (see below).

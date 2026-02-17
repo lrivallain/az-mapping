@@ -1701,3 +1701,185 @@ class TestSkuProfile:
         assert isinstance(caps["IntVal"], int)
         assert caps["FloatVal"] == pytest.approx(3.14)
         assert caps["StrVal"] == "hello"
+
+
+# ---------------------------------------------------------------------------
+# Deployment Confidence Score integration tests
+# ---------------------------------------------------------------------------
+
+
+class TestDeploymentConfidence:
+    """Tests for confidence score integration in the /api/skus endpoint."""
+
+    def _sku_response(self, *, zones=("1", "2", "3"), restrictions=()):
+        return {
+            "value": [
+                {
+                    "name": "Standard_D2s_v3",
+                    "resourceType": "virtualMachines",
+                    "family": "standardDSv3Family",
+                    "locations": ["eastus"],
+                    "locationInfo": [{"location": "eastus", "zones": list(zones)}],
+                    "capabilities": [
+                        {"name": "vCPUs", "value": "2"},
+                        {"name": "MemoryGB", "value": "8"},
+                    ],
+                    "restrictions": list(restrictions),
+                },
+            ],
+            "nextLink": None,
+        }
+
+    def _usage_response(self, *, limit=100, current=10):
+        return {
+            "value": [
+                {
+                    "name": {"value": "standardDSv3Family"},
+                    "limit": limit,
+                    "currentValue": current,
+                }
+            ]
+        }
+
+    def _mock_dispatch(self, sku_resp, usage_resp=None, retail_resp=None):
+        def _dispatch(url, **kwargs):
+            resp = MagicMock()
+            resp.raise_for_status.return_value = None
+            resp.status_code = 200
+            if "/Microsoft.Compute/skus" in url:
+                resp.json.return_value = sku_resp
+            elif "/usages" in url:
+                resp.json.return_value = usage_resp or {"value": []}
+            elif "prices.azure.com" in url:
+                resp.json.return_value = retail_resp or {"Items": [], "NextPageLink": None}
+            else:
+                resp.json.return_value = {"value": []}
+            return resp
+
+        return _dispatch
+
+    def test_skus_include_confidence_key(self, client):
+        """Every SKU in the response must have a confidence dict."""
+        sku_resp = self._sku_response()
+        with patch(
+            "az_mapping.azure_api.requests.get",
+            side_effect=self._mock_dispatch(sku_resp),
+        ):
+            resp = client.get("/api/skus?region=eastus&subscriptionId=sub1")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        conf = data[0]["confidence"]
+        assert "score" in conf
+        assert "label" in conf
+        assert "breakdown" in conf
+        assert "missing" in conf
+
+    def test_confidence_without_prices(self, client):
+        """Without pricing, pricePressure should be in the missing list."""
+        sku_resp = self._sku_response()
+        with patch(
+            "az_mapping.azure_api.requests.get",
+            side_effect=self._mock_dispatch(sku_resp),
+        ):
+            resp = client.get("/api/skus?region=eastus&subscriptionId=sub1")
+
+        conf = resp.json()[0]["confidence"]
+        assert "pricePressure" in conf["missing"]
+        # Spot is also missing (server-side has no spot scores)
+        assert "spot" in conf["missing"]
+
+    def test_confidence_with_prices(self, client):
+        """With includePrices=true and pricing data, pricePressure is present."""
+        sku_resp = self._sku_response()
+        retail_resp = {
+            "Items": [
+                {
+                    "armSkuName": "Standard_D2s_v3",
+                    "skuName": "D2s v3",
+                    "meterName": "D2s v3",
+                    "retailPrice": 0.096,
+                    "type": "Consumption",
+                    "productName": "Virtual Machines DSv3 Series",
+                },
+                {
+                    "armSkuName": "Standard_D2s_v3",
+                    "skuName": "D2s v3 Spot",
+                    "meterName": "D2s v3 Spot",
+                    "retailPrice": 0.019,
+                    "type": "Consumption",
+                    "productName": "Virtual Machines DSv3 Series",
+                },
+            ],
+            "NextPageLink": None,
+        }
+        with patch(
+            "az_mapping.azure_api.requests.get",
+            side_effect=self._mock_dispatch(sku_resp, retail_resp=retail_resp),
+        ):
+            resp = client.get("/api/skus?region=eastus&subscriptionId=sub1&includePrices=true")
+
+        conf = resp.json()[0]["confidence"]
+        assert "pricePressure" not in conf["missing"]
+        signal_names = [b["signal"] for b in conf["breakdown"]]
+        assert "pricePressure" in signal_names
+
+    def test_confidence_with_quota(self, client):
+        """Quota enrichment feeds into the confidence score."""
+        sku_resp = self._sku_response()
+        usage_resp = self._usage_response(limit=100, current=10)
+        with patch(
+            "az_mapping.azure_api.requests.get",
+            side_effect=self._mock_dispatch(sku_resp, usage_resp=usage_resp),
+        ):
+            resp = client.get("/api/skus?region=eastus&subscriptionId=sub1")
+
+        conf = resp.json()[0]["confidence"]
+        assert "quota" not in conf["missing"]
+        signal_names = [b["signal"] for b in conf["breakdown"]]
+        assert "quota" in signal_names
+
+    def test_confidence_with_restrictions(self, client):
+        """Restrictions lower the confidence score."""
+        restricted_resp = self._sku_response(
+            restrictions=[{"type": "Zone", "restrictionInfo": {"zones": ["3"]}}]
+        )
+        clean_resp = self._sku_response()
+
+        with patch(
+            "az_mapping.azure_api.requests.get",
+            side_effect=self._mock_dispatch(restricted_resp),
+        ):
+            resp_r = client.get("/api/skus?region=eastus&subscriptionId=sub1")
+
+        with patch(
+            "az_mapping.azure_api.requests.get",
+            side_effect=self._mock_dispatch(clean_resp),
+        ):
+            resp_c = client.get("/api/skus?region=eastus&subscriptionId=sub1")
+
+        conf_r = resp_r.json()[0]["confidence"]
+        conf_c = resp_c.json()[0]["confidence"]
+        assert conf_r["score"] < conf_c["score"]
+
+    def test_confidence_zones_reflected(self, client):
+        """More zones produce a higher zone breadth signal."""
+        one_zone = self._sku_response(zones=("1",))
+        three_zones = self._sku_response(zones=("1", "2", "3"))
+
+        with patch(
+            "az_mapping.azure_api.requests.get",
+            side_effect=self._mock_dispatch(one_zone),
+        ):
+            resp1 = client.get("/api/skus?region=eastus&subscriptionId=sub1")
+
+        with patch(
+            "az_mapping.azure_api.requests.get",
+            side_effect=self._mock_dispatch(three_zones),
+        ):
+            resp3 = client.get("/api/skus?region=eastus&subscriptionId=sub1")
+
+        conf1 = resp1.json()[0]["confidence"]
+        conf3 = resp3.json()[0]["confidence"]
+        assert conf3["score"] >= conf1["score"]

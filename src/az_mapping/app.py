@@ -15,6 +15,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from az_mapping import azure_api
+from az_mapping.services.capacity_confidence import compute_capacity_confidence
 
 _PKG_DIR = Path(__file__).resolve().parent
 
@@ -210,6 +211,26 @@ async def get_skus(
         azure_api.enrich_skus_with_quotas(skus, region, subscriptionId, tenantId)
         if includePrices:
             azure_api.enrich_skus_with_prices(skus, region, currencyCode)
+
+        # Compute Deployment Confidence Score for each SKU
+        for sku in skus:
+            caps = sku.get("capabilities", {})
+            quota = sku.get("quota", {})
+            pricing = sku.get("pricing", {})
+            try:
+                vcpus = int(caps.get("vCPUs", 0))
+            except (TypeError, ValueError):
+                vcpus = None
+            remaining = quota.get("remaining")
+            sku["confidence"] = compute_capacity_confidence(
+                vcpus=vcpus,
+                zones_supported_count=len(sku.get("zones", [])),
+                restrictions_present=len(sku.get("restrictions", [])) > 0,
+                quota_remaining_vcpu=remaining,
+                paygo_price=pricing.get("paygo") if pricing else None,
+                spot_price=pricing.get("spot") if pricing else None,
+            )
+
         return JSONResponse(skus)
     except Exception as exc:
         logger.exception("Failed to fetch SKUs")

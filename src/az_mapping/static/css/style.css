@@ -1291,3 +1291,87 @@ body {
         background: var(--card-bg);
     }
 }
+
+/* ---------------------------------------------------------------------------
+   Confidence Score
+   --------------------------------------------------------------------------- */
+.confidence-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.confidence-badge small {
+    font-weight: 500;
+    font-size: 0.68rem;
+    opacity: 0.85;
+}
+.confidence-high       { background: #dff6dd; color: #1a7f37; }
+.confidence-medium     { background: #fff8c5; color: #9a6700; }
+.confidence-low        { background: #ffebe9; color: #cf222e; }
+.confidence-very-low   { background: #ffcccb; color: #82071e; }
+
+.confidence-section {
+    margin-top: 1.25rem;
+}
+.confidence-title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 0.5rem;
+}
+.confidence-breakdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    margin-bottom: 0.5rem;
+}
+.confidence-breakdown-table th {
+    text-align: left;
+    padding: 0.35rem 0.5rem;
+    background: var(--azure-light);
+    color: var(--azure);
+    font-weight: 600;
+    font-size: 0.75rem;
+    border-bottom: 2px solid var(--border);
+}
+.confidence-breakdown-table td {
+    padding: 0.3rem 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+.confidence-missing {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-style: italic;
+    margin: 0;
+}
+
+/* Dark mode – confidence */
+[data-theme="dark"] .confidence-high     { background: #1a3d1f; color: #3fb950; }
+[data-theme="dark"] .confidence-medium   { background: #3d3012; color: #d29922; }
+[data-theme="dark"] .confidence-low      { background: #3d1519; color: #f85149; }
+[data-theme="dark"] .confidence-very-low { background: #4d0e14; color: #ff7b72; }
+[data-theme="dark"] .confidence-title { color: #58a6ff; }
+[data-theme="dark"] .confidence-breakdown-table th {
+    background: var(--azure-light);
+    color: #58a6ff;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .confidence-high     { background: #1a3d1f; color: #3fb950; }
+    :root:not([data-theme="light"]) .confidence-medium   { background: #3d3012; color: #d29922; }
+    :root:not([data-theme="light"]) .confidence-low      { background: #3d1519; color: #f85149; }
+    :root:not([data-theme="light"]) .confidence-very-low { background: #4d0e14; color: #ff7b72; }
+    :root:not([data-theme="light"]) .confidence-title { color: #58a6ff; }
+    :root:not([data-theme="light"]) .confidence-breakdown-table th {
+        background: var(--azure-light);
+        color: #58a6ff;
+    }
+}
