@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from az_mapping import azure_api
+from az_mapping import __version__, azure_api
 from az_mapping.models.deployment_plan import DeploymentIntentRequest
 from az_mapping.services.capacity_confidence import compute_capacity_confidence
 from az_mapping.services.deployment_planner import plan_deployment
@@ -40,6 +40,7 @@ async def _lifespan(_app: FastAPI) -> AsyncGenerator[None]:
 
 app = FastAPI(
     title="az-mapping API",
+    version=__version__,
     description=(
         "REST API for the Azure Availability Zone Mapping Viewer. "
         "Provides endpoints to discover Azure tenants, subscriptions, "
@@ -96,7 +97,7 @@ logger = logging.getLogger(__name__)
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def index(request: Request) -> HTMLResponse:
     """Serve the main page."""
-    return templates.TemplateResponse(request, "index.html")
+    return templates.TemplateResponse(request, "index.html", {"version": __version__})
 
 
 @app.get("/api/tenants", tags=["Discovery"], summary="List Azure AD tenants")

@@ -500,6 +500,32 @@
     font-size: 0.85rem;
 }
 
+/* ---- Responsive modal sizing ---- */
+@media (min-width: 1200px) {
+    #pricingModal .modal-dialog { max-width: 900px; }
+}
+
+@media (max-width: 767.98px) {
+    .vm-profile-grid { grid-template-columns: 1fr; }
+    .pricing-detail-table { font-size: 0.78rem; }
+    .confidence-breakdown-table { font-size: 0.76rem; }
+    .vm-profile-row { font-size: 0.75rem; }
+    .vm-profile-card { padding: 0.5rem; }
+    .vm-profile-card-title { font-size: 0.78rem; }
+    .region-summary-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+    }
+    #pricingAccordion .accordion-button,
+    #quotaAccordion .accordion-button,
+    #zoneAccordion .accordion-button {
+        font-size: 0.82rem;
+        padding: 0.4rem 0.6rem;
+    }
+}
+
 /* ---- Dark theme tweaks for custom badges ---- */
 [data-bs-theme="dark"] .spot-high { background: #1e4620; color: #a3d9a5; }
 [data-bs-theme="dark"] .spot-medium { background: #4a3c00; color: #ffe066; }
