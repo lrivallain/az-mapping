@@ -8,6 +8,10 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.MICRO`).
 
 ## [Unreleased]
 
+## [2026.2.5] - 2026-02-19
+
+- Project renamed from `az-mapping` to `az-scout` – package, CLI entry point, imports, documentation, and CI/CD all updated. PyPI package is now `az-scout`.
+
 ## [2026.2.4] - 2026-02-19
 
 ### Added

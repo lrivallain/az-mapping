@@ -90,6 +90,7 @@ An [MCP](https://modelcontextprotocol.io/) server is included, allowing AI agent
 | `get_zone_mappings` | Get logical→physical zone mappings for subscriptions in a region |
 | `get_sku_availability` | Get VM SKU availability per zone with restrictions, capabilities, and vCPU quota per family |
 | `get_spot_scores` | Get Spot Placement Scores (High / Medium / Low) for a list of VM sizes in a region |
+| `get_sku_pricing_detail` | Get detailed Linux pricing (PayGo, Spot, RI 1Y/3Y, SP 1Y/3Y) and VM profile for a single SKU |
 
 `get_sku_availability` supports optional filters to reduce output size:
 `name`, `family`, `min_vcpus`, `max_vcpus`, `min_memory_gb`, `max_memory_gb`.
