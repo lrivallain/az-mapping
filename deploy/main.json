@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.40.2.10011",
-      "templateHash": "13129102640643064827"
+      "templateHash": "13139971893127309198"
     }
   },
   "parameters": {
@@ -23,18 +23,11 @@
         "description": "Base name used as prefix for all resources."
       }
     },
-    "containerImageTag": {
-      "type": "string",
-      "defaultValue": "latest",
-      "metadata": {
-        "description": "Container image tag to deploy (e.g. \"latest\", \"2026.2.5\")."
-      }
-    },
     "containerImage": {
       "type": "string",
-      "defaultValue": "[format('ghcr.io/lrivallain/az-scout:{0}', parameters('containerImageTag'))]",
+      "defaultValue": "ghcr.io/lrivallain/az-scout:latest",
       "metadata": {
-        "description": "Full container image reference. Override to use a private registry."
+        "description": "Full container image reference (e.g. \"ghcr.io/lrivallain/az-scout:latest\", \"ghcr.io/lrivallain/az-scout:2026.2.5\"). Override to use a private registry."
       }
     },
     "containerCpu": {

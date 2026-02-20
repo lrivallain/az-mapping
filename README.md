@@ -200,7 +200,7 @@ API documentation is available at `/docs` (Swagger UI) and `/redoc` (ReDoc) when
 
 ## Deploy to Azure (Container App)
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Flrivallain%2Faz-scout%2Fmain%2Fdeploy%2Fmain.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Flrivallain%2Faz-scout%2Fmain%2Fdeploy%2Fmain.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Flrivallain%2Faz-scout%2Fmain%2Fdeploy%2FcreateUiDefinition.json)
 
 A Bicep template is provided to deploy az-scout as an Azure Container App with a managed identity.
 You can use the **Deploy to Azure** button above for a portal-guided experience, or use the CLI commands below.
@@ -215,7 +215,6 @@ az group create -n rg-az-scout -l westeurope
 az deployment group create \
   -g rg-az-scout \
   -f deploy/main.bicep \
-  -p containerImageTag=latest \
   -p readerSubscriptionIds='["SUB_ID_1","SUB_ID_2"]'
 ```
 
@@ -249,7 +248,6 @@ Add these parameters to protect the app with Microsoft login:
 az deployment group create \
   -g rg-az-scout \
   -f deploy/main.bicep \
-  -p containerImageTag=latest \
   -p readerSubscriptionIds='["SUB_ID_1"]' \
   -p enableAuth=true \
   -p authClientId=<app-registration-client-id> \

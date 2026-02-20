@@ -60,7 +60,6 @@ az ad sp create --id "$APP_ID"
 az deployment group create \
   -g rg-az-scout \
   -f deploy/main.bicep \
-  -p containerImageTag=latest \
   -p readerSubscriptionIds='["SUB_ID_1","SUB_ID_2"]' \
   -p enableAuth=true \
   -p authClientId="$APP_ID" \

@@ -268,6 +268,7 @@ async function fetchTenants() {
                 select.innerHTML = `<option value="${authTenants[0].id}">${escapeHtml(authTenants[0].name)}</option>`;
                 select.value = authTenants[0].id;
                 select.disabled = true;
+                select.classList.add("no-arrow");
             } else {
                 document.getElementById("tenant-section").classList.add("d-none");
             }
