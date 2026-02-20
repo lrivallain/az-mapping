@@ -1,10 +1,38 @@
-# az-scout
+# Azure Scout: `az-scout`
+
+[![CI](https://github.com/lrivallain/az-scout/actions/workflows/ci.yml/badge.svg)](https://github.com/lrivallain/az-scout/actions/workflows/ci.yml)
+[![Publish to PyPI](https://github.com/lrivallain/az-scout/actions/workflows/publish.yml/badge.svg)](https://github.com/lrivallain/az-scout/actions/workflows/publish.yml)
+[![Publish Container Image](https://github.com/lrivallain/az-scout/actions/workflows/container.yml/badge.svg)](https://github.com/lrivallain/az-scout/actions/workflows/container.yml)
+[![PyPI version](https://img.shields.io/pypi/v/az-scout)](https://pypi.org/project/az-scout/)
+[![Downloads](https://img.shields.io/pypi/dm/az-scout)](https://pypi.org/project/az-scout/)
+[![License](https://img.shields.io/github/license/lrivallain/az-scout)](LICENSE.txt)
 
 Scout Azure regions for VM availability, zone mappings, pricing, spot scores, and quota — then plan deployments with confidence.
 
 > **az-scout** helps you compare how Azure maps logical Availability Zones to physical zones across subscriptions, evaluate SKU capacity and pricing, and generate deterministic deployment plans — all from a single web UI or MCP-powered AI agent.
 
+
+## Features
+
+- **Logical-to-physical zone mapping** – visualise how Azure maps logical Availability Zones (Zone 1, Zone 2, Zone 3) to physical zones (e.g., eastus-az1, eastus-az2) across subscriptions in a region.
+- **SKU availability view** – shows VM SKU availability per physical zone with vCPU quota usage (limit / used / remaining) and CSV export.
+- **Spot Placement Scores** – evaluate the likelihood of Spot VM allocation (High / Medium / Low) per SKU for a given region and instance count, powered by the Azure Compute RP.
+- **Deployment Confidence Score** – a composite 0–100 score per SKU estimating deployment success probability, synthesised from quota headroom, Spot Placement Score, availability zone breadth, restrictions, and price pressure signals. Missing signals are automatically excluded with weight renormalisation. The score updates live when Spot Placement Scores arrive.
+- **Deployment Plan** – agent-ready `POST /api/deployment-plan` endpoint that evaluates (region, SKU) combinations against zones, quotas, spot scores, pricing, and restrictions. Returns a deterministic, ranked plan with business and technical views (no LLM, no invention — missing data is flagged explicitly).
+- **MCP server** – expose all capabilities as MCP tools for AI agents (see below).
+
+
 ## Quick start
+
+### Prerequisites
+
+| Requirement | Details |
+|---|---|
+| Python | ≥ 3.11 |
+| Azure credentials | Any method supported by `DefaultAzureCredential` (`az login`, managed identity, …) |
+| RBAC | **Reader** on the subscriptions you want to query, **Virtual Machine Contributor** on the subscriptions for Spot Placement Scores retrieval |
+
+### Run locally with `uv` tool (recommended)
 
 ```bash
 # Make sure you are authenticated to Azure
@@ -16,10 +44,90 @@ uvx az-scout
 
 Your browser opens automatically at `http://127.0.0.1:5001`.
 
+
+## Installation options
+
+### Recommended: install with `uv`
+
+```bash
+uv install az-scout
+uvx az-scout
+```
+
+### Alternative: install with `pip`
+
+```bash
+pip install az-scout
+az-scout
+```
+
+### Docker
+
+```bash
+docker run --rm -p 8000:8000 \
+  -e AZURE_TENANT_ID=<your-tenant> \
+  -e AZURE_CLIENT_ID=<your-sp-client-id> \
+  -e AZURE_CLIENT_SECRET=<your-sp-secret> \
+  ghcr.io/lrivallain/az-scout:latest
+```
+
+### Azure Container App
+
+It is also possible to deploy az-scout as a web app in Azure using the provided Bicep template (see [Deploy to Azure](#deploy-to-azure-container-app) section below).
+
+**Note:** The web UI is designed for local use and may **not be suitable for public-facing deployment without additional security measures** (authentication, network restrictions, etc.). The MCP server can be exposed over the public internet if needed, but ensure you have proper authentication and authorization in place to protect access to Azure data.
+
+#### UI guided deployment
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Flrivallain%2Faz-scout%2Fmain%2Fdeploy%2Fmain.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Flrivallain%2Faz-scout%2Fmain%2Fdeploy%2FcreateUiDefinition.json)
+
+A Bicep template is provided to deploy az-scout as an Azure Container App with a managed identity.
+You can use the **Deploy to Azure** button above for a portal-guided experience, or use the CLI commands below.
+
+#### Bicep deploy from CLI
+
+```bash
+# Create a resource group
+az group create -n rg-az-scout -l <your-region>
+
+# Deploy (replace subscription IDs with your own)
+az deployment group create \
+  -g rg-az-scout \
+  -f deploy/main.bicep \
+  -p readerSubscriptionIds='["SUB_ID_1","SUB_ID_2"]'
+```
+
+See [`deploy/main.example.bicepparam`](deploy/main.example.bicepparam) for all available parameters.
+
+#### Resources created
+
+The deployment creates:
+
+| Resource | Purpose |
+|---|---|
+| **Container App** | Runs `ghcr.io/lrivallain/az-scout` |
+| **Managed Identity** | `Reader` role on target subscriptions |
+| **VM Contributor** | `Virtual Machine Contributor` role for Spot Placement Scores (enabled by default) |
+| **Log Analytics** | Container logs and diagnostics |
+| **Container Apps Env** | Hosting environment |
+
+> **Note:** The `Virtual Machine Contributor` role is required for querying Spot Placement Scores (POST endpoint). Set `enableSpotScoreRole=false` to skip this if you don't need spot scores or prefer to manage permissions manually.
+
+#### Enable Entra ID authentication (EasyAuth)
+
+For a complete walkthrough (App Registration creation, client secret, user assignment, troubleshooting), see [`deploy/EASYAUTH.md`](deploy/EASYAUTH.md).
+
+## Usage
+
 ### CLI options
 
-```
+```bash
 az-scout [COMMAND] [OPTIONS]
+
+az-scout --help.     # show global help
+az-scout web --help  # show web subcommand help
+az-scout mcp --help  # show mcp subcommand help
+az-scout --version   # show version
 ```
 
 #### `az-scout web` (default)
@@ -46,41 +154,11 @@ Run the MCP server.
   --help          Show this message and exit.
 ```
 
-### Alternative install
-
-```bash
-pip install az-scout
-az-scout
-```
-
-## Prerequisites
-
-| Requirement | Details |
-|---|---|
-| Python | ≥ 3.11 |
-| Azure credentials | Any method supported by `DefaultAzureCredential` (`az login`, managed identity, …) |
-| RBAC | **Reader** on the subscriptions you want to query |
-
-## Features
-
-- **Region selector** – AZ-enabled regions, loaded automatically.
-- **Subscription picker** – searchable, multi-select.
-- **Collapsible sidebar** – toggle the filter panel to maximize the results area.
-- **Graph view** – D3.js bipartite diagram (Logical Zone → Physical Zone), colour-coded per subscription with interactive hover highlighting.
-- **Table view** – comparison table with consistency indicators.
-- **SKU availability view** – shows VM SKU availability per physical zone with vCPU quota usage (limit / used / remaining) and CSV export.
-- **Spot Placement Scores** – evaluate the likelihood of Spot VM allocation (High / Medium / Low) per SKU for a given region and instance count, powered by the Azure Compute RP.
-- **Deployment Confidence Score** – a composite 0–100 score per SKU estimating deployment success probability, synthesised from quota headroom, Spot Placement Score, availability zone breadth, restrictions, and price pressure signals. Missing signals are automatically excluded with weight renormalisation. The score updates live when Spot Placement Scores arrive.
-- **Deployment Plan** – agent-ready `POST /api/deployment-plan` endpoint that evaluates (region, SKU) combinations against zones, quotas, spot scores, pricing, and restrictions. Returns a deterministic, ranked plan with business and technical views (no LLM, no invention — missing data is flagged explicitly).
-- **Export** – download the graph as PNG or the tables as CSV.
-- **Shareable URLs** – filters are reflected in the URL; reload or share a link to restore the exact view.
-- **MCP server** – expose all capabilities as MCP tools for AI agents (see below).
-
-## MCP server
+### MCP server
 
 An [MCP](https://modelcontextprotocol.io/) server is included, allowing AI agents (Claude Desktop, VS Code Copilot, etc.) to query zone mappings and SKU availability directly.
 
-### Available tools
+#### Available tools
 
 | Tool | Description |
 |---|---|
@@ -94,8 +172,6 @@ An [MCP](https://modelcontextprotocol.io/) server is included, allowing AI agent
 
 `get_sku_availability` supports optional filters to reduce output size:
 `name`, `family`, `min_vcpus`, `max_vcpus`, `min_memory_gb`, `max_memory_gb`.
-
-### Usage
 
 #### stdio transport (default – for Claude Desktop, VS Code, etc.)
 
@@ -135,11 +211,15 @@ If using `uv`:
 az-scout mcp --sse --port 8080
 ```
 
-## Deployment Plan API
+### API
+
+API documentation is available at `/docs` (Swagger UI) and `/redoc` (ReDoc) when the server is running.
+
+### Deployment Plan API
 
 The `POST /api/deployment-plan` endpoint provides a deterministic decision engine for deployment planning. It is designed for Sales / Solution Engineers and AI agents: no LLM is involved — every decision traces back to real Azure data.
 
-### Request
+#### Request
 
 ```json
 {
@@ -162,7 +242,7 @@ The `POST /api/deployment-plan` endpoint provides a deterministic decision engin
 }
 ```
 
-### Response (abbreviated)
+#### Response (abbreviated)
 
 ```json
 {
@@ -191,7 +271,8 @@ The `POST /api/deployment-plan` endpoint provides a deterministic decision engin
 
 > **Note:** Spot placement scores are probabilistic and not a guarantee of allocation. Quota values are dynamic and may change between planning and actual deployment.
 
-## How it works
+
+## Under the hood
 
 The backend calls the Azure Resource Manager REST API to fetch:
 - **Zone mappings**: `availabilityZoneMappings` from `/subscriptions/{id}/locations` endpoint
@@ -199,9 +280,6 @@ The backend calls the Azure Resource Manager REST API to fetch:
 - **Compute Usages**: vCPU quota per VM family from `/subscriptions/{id}/providers/Microsoft.Compute/locations/{region}/usages` endpoint (cached for 10 minutes, with retry on throttling and graceful handling of 403)
 - **Spot Placement Scores**: likelihood indicators for Spot VM allocation from `/subscriptions/{id}/providers/Microsoft.Compute/locations/{region}/placementScores/spot/generate` endpoint (batched in chunks of 100, sequential execution with retry/back-off, cached for 10 minutes). Note: these scores reflect the probability of obtaining a Spot VM allocation, not datacenter capacity.
 
-The frontend renders the results as an interactive graph, comparison table, and SKU availability table with quota columns.
-
-API documentation is available at `/docs` (Swagger UI) and `/redoc` (ReDoc) when the server is running.
 
 ## License
 

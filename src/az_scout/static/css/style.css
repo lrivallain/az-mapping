@@ -2,6 +2,15 @@
    Azure Scout – Custom styles (Bootstrap 5.3 overrides)
    =================================================================== */
 
+/* Hide dropdown arrow on single-value selects */
+select.no-arrow {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: none !important;
+    padding-right: 0.75rem !important;
+}
+
 /* ---- Custom properties ---- */
 :root {
     --az-blue: #0078d4;

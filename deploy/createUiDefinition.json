@@ -1,0 +1,208 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "config": {
+      "isWizard": false,
+      "basics": {
+        "description": "Deploy **az-scout** as an Azure Container App with a managed identity.\n\nScout Azure regions for VM availability, zone mappings, pricing, spot scores, and quota.",
+        "location": {
+          "label": "Region",
+          "resourceTypes": ["Microsoft.App/containerApps"]
+        }
+      }
+    },
+    "basics": [
+      {
+        "name": "baseName",
+        "type": "Microsoft.Common.TextBox",
+        "label": "Resource name prefix",
+        "defaultValue": "az-scout",
+        "toolTip": "Base name used as prefix for all created resources (Container App, identity, logs).",
+        "constraints": {
+          "required": true,
+          "regex": "^[a-z0-9][a-z0-9-]{1,20}$",
+          "validationMessage": "Lowercase letters, numbers, and hyphens only. 2–21 characters."
+        }
+      }
+    ],
+    "steps": [
+      {
+        "name": "container",
+        "label": "Container",
+        "elements": [
+          {
+            "name": "containerImage",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Container image",
+            "defaultValue": "ghcr.io/lrivallain/az-scout:latest",
+            "toolTip": "Full image reference including tag (e.g. ghcr.io/lrivallain/az-scout:2026.2.5).",
+            "constraints": {
+              "required": true,
+              "regex": "^.+:.+$",
+              "validationMessage": "Must be a valid image reference with a tag (e.g. registry/image:tag)."
+            }
+          },
+          {
+            "name": "containerCpu",
+            "type": "Microsoft.Common.DropDown",
+            "label": "CPU cores",
+            "defaultValue": "0.5",
+            "toolTip": "CPU cores allocated to the container.",
+            "constraints": {
+              "required": true,
+              "allowedValues": [
+                { "label": "0.25", "value": "0.25" },
+                { "label": "0.5", "value": "0.5" },
+                { "label": "1.0", "value": "1.0" },
+                { "label": "2.0", "value": "2.0" }
+              ]
+            }
+          },
+          {
+            "name": "containerMemory",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Memory",
+            "defaultValue": "1.0 Gi",
+            "toolTip": "Memory allocated to the container.",
+            "constraints": {
+              "required": true,
+              "allowedValues": [
+                { "label": "0.5 Gi", "value": "0.5Gi" },
+                { "label": "1.0 Gi", "value": "1.0Gi" },
+                { "label": "2.0 Gi", "value": "2.0Gi" },
+                { "label": "4.0 Gi", "value": "4.0Gi" }
+              ]
+            }
+          },
+          {
+            "name": "minReplicas",
+            "type": "Microsoft.Common.Slider",
+            "label": "Minimum replicas",
+            "subLabel": "",
+            "defaultValue": 0,
+            "toolTip": "Minimum number of replicas. 0 allows scale-to-zero.",
+            "min": 0,
+            "max": 10,
+            "showStepMarkers": false,
+            "constraints": { "required": false }
+          },
+          {
+            "name": "maxReplicas",
+            "type": "Microsoft.Common.Slider",
+            "label": "Maximum replicas",
+            "subLabel": "",
+            "defaultValue": 2,
+            "toolTip": "Maximum number of replicas for auto-scaling.",
+            "min": 1,
+            "max": 10,
+            "showStepMarkers": false,
+            "constraints": { "required": false }
+          }
+        ]
+      },
+      {
+        "name": "permissions",
+        "label": "Permissions",
+        "elements": [
+          {
+            "name": "subscriptionsApi",
+            "type": "Microsoft.Solutions.ArmApiControl",
+            "request": {
+              "method": "GET",
+              "path": "/subscriptions?api-version=2022-12-01"
+            }
+          },
+          {
+            "name": "readerSubscriptionIds",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Target subscriptions",
+            "multiselect": true,
+            "selectAll": true,
+            "toolTip": "Select the subscriptions to grant Reader access to the managed identity.",
+            "constraints": {
+              "allowedValues": "[map(filter(steps('permissions').subscriptionsApi.value, (sub) => equals(sub.state, 'Enabled')), (sub) => parse(concat('{\"label\":\"', sub.displayName, ' (', sub.subscriptionId, ')\",\"value\":\"', sub.subscriptionId, '\"}')))]",
+              "required": true
+            }
+          },
+          {
+            "name": "enableSpotScoreRole",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Assign VM Contributor role (required for Spot Placement Scores)",
+            "toolTip": "Assigns the Virtual Machine Contributor role on target subscriptions for querying Spot Placement Scores.",
+            "defaultValue": true
+          }
+        ]
+      },
+      {
+        "name": "authentication",
+        "label": "Authentication (EasyAuth)",
+        "elements": [
+          {
+            "name": "enableAuth",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Enable Entra ID authentication",
+            "toolTip": "Protect the app with Microsoft Entra ID login (EasyAuth)."
+          },
+          {
+            "name": "authClientId",
+            "type": "Microsoft.Common.TextBox",
+            "label": "App Registration Client ID",
+            "defaultValue": "",
+            "toolTip": "Client ID from your Entra ID App Registration.",
+            "visible": "[steps('authentication').enableAuth]",
+            "constraints": {
+              "required": "[steps('authentication').enableAuth]",
+              "regex": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "validationMessage": "Must be a valid GUID."
+            }
+          },
+          {
+            "name": "authClientSecret",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": {
+              "password": "App Registration Client Secret"
+            },
+            "toolTip": "Client secret from your Entra ID App Registration.",
+            "visible": "[steps('authentication').enableAuth]",
+            "constraints": {
+              "required": "[steps('authentication').enableAuth]"
+            },
+            "options": {
+              "hideConfirmation": true
+            }
+          },
+          {
+            "name": "authTenantId",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Tenant ID (optional)",
+            "defaultValue": "",
+            "toolTip": "Entra ID tenant ID. Leave empty to use the deployment tenant.",
+            "visible": "[steps('authentication').enableAuth]",
+            "constraints": {
+              "required": false,
+              "regex": "^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?$",
+              "validationMessage": "Must be a valid GUID or empty."
+            }
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "location": "[location()]",
+      "baseName": "[basics('baseName')]",
+      "containerImage": "[steps('container').containerImage]",
+      "containerCpu": "[steps('container').containerCpu]",
+      "containerMemory": "[steps('container').containerMemory]",
+      "minReplicas": "[steps('container').minReplicas]",
+      "maxReplicas": "[steps('container').maxReplicas]",
+      "readerSubscriptionIds": "[steps('permissions').readerSubscriptionIds]",
+      "enableSpotScoreRole": "[steps('permissions').enableSpotScoreRole]",
+      "enableAuth": "[steps('authentication').enableAuth]",
+      "authClientId": "[if(steps('authentication').enableAuth, steps('authentication').authClientId, '')]",
+      "authClientSecret": "[if(steps('authentication').enableAuth, steps('authentication').authClientSecret, '')]",
+      "authTenantId": "[if(and(steps('authentication').enableAuth, not(empty(steps('authentication').authTenantId))), steps('authentication').authTenantId, '')]"
+    }
+  }
+}
