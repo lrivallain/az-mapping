@@ -228,6 +228,8 @@ Add to your MCP client configuration:
 ```
 
 > **Hosted deployment:** When running as a Container App (or any hosted web server), the MCP SSE endpoint is automatically available at `/mcp/sse` alongside the web UI — no separate server needed. Point your MCP client to `https://<your-app-url>/mcp/sse`.
+>
+> **EasyAuth:** If your Container App has EasyAuth enabled, MCP clients must pass a bearer token in the `Authorization` header. See the [EasyAuth guide](deploy/EASYAUTH.md#7-connect-mcp-clients-through-easyauth) for detailed instructions.
 
 ### API
 
