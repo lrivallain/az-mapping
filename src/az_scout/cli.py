@@ -2,7 +2,7 @@
 
 Provides two subcommands:
     az-scout web  – run the web UI (FastAPI + uvicorn)
-    az-scout mcp  – run the MCP server (stdio or SSE transport)
+    az-scout mcp  – run the MCP server (stdio or Streamable HTTP transport)
 
 Running ``az-scout`` without a subcommand defaults to ``web``.
 """
@@ -104,16 +104,16 @@ def web(
 
 @cli.command()
 @click.option(
-    "--sse",
+    "--http",
     is_flag=True,
     default=False,
-    help="Use SSE transport instead of stdio.",
+    help="Use Streamable HTTP transport instead of stdio.",
 )
 @click.option(
     "--port",
     default=8080,
     show_default=True,
-    help="Port for SSE transport.",
+    help="Port for Streamable HTTP transport.",
 )
 @click.option(
     "--verbose",
@@ -122,7 +122,7 @@ def web(
     default=False,
     help="Enable verbose logging.",
 )
-def mcp(sse: bool, port: int, verbose: bool) -> None:
+def mcp(http: bool, port: int, verbose: bool) -> None:
     """Run the MCP server."""
     import logging
 
@@ -133,8 +133,8 @@ def mcp(sse: bool, port: int, verbose: bool) -> None:
     else:
         logging.basicConfig(level=logging.WARNING)
 
-    if sse:
+    if http:
         mcp_server.settings.port = port
-        mcp_server.run(transport="sse")
+        mcp_server.run(transport="streamable-http")
     else:
         mcp_server.run(transport="stdio")

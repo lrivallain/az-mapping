@@ -8,7 +8,27 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.MICRO`).
 
 ## [Unreleased]
 
+### Added
+
+- Replacement of SSE transport with Streamable HTTP in the MCP server for broader compatibility (e.g., Azure Container Apps, GitHub Codespaces).
+- MCP server available at `/mcp` for integration with web-based clients or when running as a hosted deployment (Container App, etc.).
+
+## [2026.2.6] - 2026-02-20
+
+### Added
+
+- Adds **Container App deployment** with optional Entra ID authentication (EasyAuth), a one-click "Deploy to Azure" portal experience, GHCR container CI, and supporting documentation.
+  - Dockerfile + GHCR publish workflow
+    - Bicep template with managed identity, Reader + VM Contributor roles, optional EasyAuth
+    - Custom portal form (createUiDefinition.json) with multi-select subscription picker
+    - EASYAUTH.md: full setup guide
+  - Pre-commit hook to keep ARM JSON in sync with Bicep
+  - EasyAuth user info in navbar
+  - Single-tenant UI polish
+
 ## [2026.2.5] - 2026-02-19
+
+### Changed
 
 - Project renamed from `az-mapping` to `az-scout` – package, CLI entry point, imports, documentation, and CI/CD all updated. PyPI package is now `az-scout`.
 
