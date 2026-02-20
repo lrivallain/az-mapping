@@ -64,7 +64,7 @@
             "name": "containerMemory",
             "type": "Microsoft.Common.DropDown",
             "label": "Memory",
-            "defaultValue": "1.0Gi",
+            "defaultValue": "1.0 Gi",
             "toolTip": "Memory allocated to the container.",
             "constraints": {
               "required": true,
