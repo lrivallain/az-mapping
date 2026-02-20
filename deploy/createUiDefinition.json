@@ -107,15 +107,23 @@
         "label": "Permissions",
         "elements": [
           {
+            "name": "subscriptionsApi",
+            "type": "Microsoft.Solutions.ArmApiControl",
+            "request": {
+              "method": "GET",
+              "path": "/subscriptions?api-version=2022-12-01"
+            }
+          },
+          {
             "name": "readerSubscriptionIds",
-            "type": "Microsoft.Common.TextBox",
-            "label": "Subscription IDs (JSON array)",
-            "defaultValue": "[]",
-            "toolTip": "JSON array of subscription IDs to grant Reader access, e.g. [\"sub-id-1\",\"sub-id-2\"].",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Target subscriptions",
+            "multiselect": true,
+            "selectAll": true,
+            "toolTip": "Select the subscriptions to grant Reader access to the managed identity.",
             "constraints": {
-              "required": true,
-              "regex": "^\\[.*\\]$",
-              "validationMessage": "Must be a JSON array, e.g. [\"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\"]."
+              "allowedValues": "[map(filter(steps('permissions').subscriptionsApi.value, (sub) => equals(sub.state, 'Enabled')), (sub) => parse(concat('{\"label\":\"', sub.displayName, ' (', sub.subscriptionId, ')\",\"value\":\"', sub.subscriptionId, '\"}')))]",
+              "required": true
             }
           },
           {
@@ -189,7 +197,7 @@
       "containerMemory": "[steps('container').containerMemory]",
       "minReplicas": "[steps('container').minReplicas]",
       "maxReplicas": "[steps('container').maxReplicas]",
-      "readerSubscriptionIds": "[parse(steps('permissions').readerSubscriptionIds)]",
+      "readerSubscriptionIds": "[steps('permissions').readerSubscriptionIds]",
       "enableSpotScoreRole": "[steps('permissions').enableSpotScoreRole]",
       "enableAuth": "[steps('authentication').enableAuth]",
       "authClientId": "[if(steps('authentication').enableAuth, steps('authentication').authClientId, '')]",
