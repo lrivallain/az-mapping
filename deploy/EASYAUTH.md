@@ -125,7 +125,7 @@ az rest --method POST \
 
 ## 7. Connect MCP clients through EasyAuth
 
-When EasyAuth is enabled, the MCP SSE endpoint (`/mcp/sse`) is also protected. Browser-based access handles login automatically via redirects, but programmatic MCP clients (VS Code Copilot, Claude Desktop, etc.) must pass a bearer token in the request headers.
+When EasyAuth is enabled, the MCP endpoint (`/mcp`) is also protected. Browser-based access handles login automatically via redirects, but programmatic MCP clients (VS Code Copilot, Claude Desktop, etc.) must pass a bearer token in the request headers.
 
 ### Expose an API and pre-authorize the Azure CLI
 
@@ -260,8 +260,8 @@ Create a `.vscode/mcp.json` in your workspace:
 {
   "servers": {
     "az-scout": {
-      "type": "sse",
-      "url": "https://az-scout.<env>.<region>.azurecontainerapps.io/mcp/sse",
+      "type": "streamableHttp",
+      "url": "https://az-scout.<env>.<region>.azurecontainerapps.io/mcp",
       "headers": {
         "Authorization": "Bearer ${microsoft_entra_id:<APP_ID>}"
       }
@@ -277,7 +277,7 @@ Replace `<APP_ID>` with your App Registration's client ID. When the MCP server s
 
 VS Code then opens a browser for interactive Entra ID login. Tokens are managed and refreshed automatically.
 
-> **How it works:** VS Code discovers the OAuth2 metadata from `/.well-known/oauth-authorization-server`, which points `/authorize` and `/token` to the app's proxy routes. These routes redirect to Entra ID for the actual OAuth2 flow (PKCE). EasyAuth validates the resulting bearer token on `/mcp/sse`.
+> **How it works:** VS Code discovers the OAuth2 metadata from `/.well-known/oauth-authorization-server`, which points `/authorize` and `/token` to the app's proxy routes. These routes redirect to Entra ID for the actual OAuth2 flow (PKCE). EasyAuth validates the resulting bearer token on `/mcp`.
 
 ### VS Code Copilot (manual token)
 
@@ -295,8 +295,8 @@ If you prefer not to use the interactive flow, you can paste a token manually:
   ],
   "servers": {
     "az-scout": {
-      "type": "sse",
-      "url": "https://az-scout.<env>.<region>.azurecontainerapps.io/mcp/sse",
+      "type": "streamableHttp",
+      "url": "https://az-scout.<env>.<region>.azurecontainerapps.io/mcp",
       "headers": {
         "Authorization": "Bearer ${input:az-scout-token}"
       }
@@ -315,7 +315,7 @@ Add a `headers` block to your MCP client configuration:
 {
   "mcpServers": {
     "az-scout": {
-      "url": "https://az-scout.<env>.<region>.azurecontainerapps.io/mcp/sse",
+      "url": "https://az-scout.<env>.<region>.azurecontainerapps.io/mcp",
       "headers": {
         "Authorization": "Bearer <TOKEN>"
       }

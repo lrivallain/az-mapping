@@ -46,8 +46,8 @@ app = FastAPI(
         "Provides endpoints to discover Azure tenants, subscriptions, "
         "AZ-enabled regions, logical-to-physical zone mappings, and "
         "resource SKU availability with optional filtering.\n\n"
-        "An **MCP server** (SSE transport) is also available at `/mcp/sse` "
-        "for AI agent integration."
+        "An **MCP server** (Streamable HTTP transport) is also available at "
+        "`/mcp` for AI agent integration."
     ),
     license_info={"name": "MIT", "url": "https://opensource.org/licenses/MIT"},
     docs_url="/docs",
@@ -66,12 +66,15 @@ app.mount("/static", StaticFiles(directory=str(_PKG_DIR / "static")), name="stat
 templates = Jinja2Templates(directory=str(_PKG_DIR / "templates"))
 
 # ---------------------------------------------------------------------------
-# MCP SSE – mount the MCP server as an ASGI sub-app under /mcp
+# MCP – mount the MCP server as an ASGI sub-app under /mcp
 # ---------------------------------------------------------------------------
 
 from az_scout.mcp_server import mcp as _mcp_server  # noqa: E402
 
-app.mount("/mcp", _mcp_server.sse_app())
+# Override the internal path so that mounting at "/mcp" gives a clean
+# "/mcp" endpoint (instead of the default "/mcp/mcp").
+_mcp_server.settings.streamable_http_path = "/"
+app.mount("/mcp", _mcp_server.streamable_http_app())
 
 # ---------------------------------------------------------------------------
 # Colored logging (reuse uvicorn's formatter)

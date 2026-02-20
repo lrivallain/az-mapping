@@ -7,7 +7,7 @@
 ## Tech stack
 
 - **Backend:** Python 3.11+, FastAPI 0.115+, uvicorn (ASGI server), click (CLI), azure-identity (DefaultAzureCredential), requests
-- **MCP:** mcp[cli] (FastMCP), stdio and SSE transports
+- **MCP:** mcp[cli] (FastMCP), stdio and Streamable HTTP transports
 - **Frontend:** Vanilla JavaScript (no framework), D3.js v7, CSS custom properties (dark/light themes)
 - **Packaging:** hatchling + hatch-vcs, CalVer (`YYYY.MM.MICRO`), src-layout
 - **Tools:** uv (package manager), ruff (lint + format), mypy (strict), pytest, pre-commit

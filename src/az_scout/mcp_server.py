@@ -6,7 +6,7 @@ MCP tools so that AI agents can query them directly.
 
 Run with:
     az-scout mcp            # stdio transport (default)
-    az-scout mcp --sse      # SSE transport on port 8080
+    az-scout mcp --http     # Streamable HTTP transport on port 8080
 
 Or add to your MCP client config (e.g. Claude Desktop):
     {

@@ -148,8 +148,8 @@ Run the web UI. This is the default when no subcommand is given.
 Run the MCP server.
 
 ```
-  --sse           Use SSE transport instead of stdio.
-  --port INTEGER  Port for SSE transport.  [default: 8080]
+  --http          Use Streamable HTTP transport instead of stdio.
+  --port INTEGER  Port for Streamable HTTP transport.  [default: 8080]
   -v, --verbose   Enable verbose logging.
   --help          Show this message and exit.
 ```
@@ -205,14 +205,14 @@ If using `uv`:
 }
 ```
 
-#### SSE transport
+#### Streamable HTTP transport
 
-When running in `web` mode, the MCP server is automatically available at `/mcp/sse` for integration with web-based clients or when running as a hosted deployment (Container App, etc.).
+When running in `web` mode, the MCP server is automatically available at `/mcp` for integration with web-based clients or when running as a hosted deployment (Container App, etc.).
 
-For **MCP-only** use with SSE transport, run:
+For **MCP-only** use with Streamable HTTP transport, run:
 
 ```bash
-az-scout mcp --sse --port 8082
+az-scout mcp --http --port 8082
 ```
 
 Add to your MCP client configuration:
@@ -221,13 +221,13 @@ Add to your MCP client configuration:
 {
   "mcpServers": {
     "az-scout": {
-      "url": "http://localhost:8082/sse" // or "https://<your-app-url>/mcp/sse" for web command
+      "url": "http://localhost:8082/mcp" // or "https://<your-app-url>/mcp" for web command
     }
   }
 }
 ```
 
-> **Hosted deployment:** When running as a Container App (or any hosted web server), the MCP SSE endpoint is automatically available at `/mcp/sse` alongside the web UI — no separate server needed. Point your MCP client to `https://<your-app-url>/mcp/sse`.
+> **Hosted deployment:** When running as a Container App (or any hosted web server), the MCP endpoint is automatically available at `/mcp` alongside the web UI — no separate server needed. Point your MCP client to `https://<your-app-url>/mcp`.
 >
 > **EasyAuth:** If your Container App has EasyAuth enabled, MCP clients must pass a bearer token in the `Authorization` header. See the [EasyAuth guide](deploy/EASYAUTH.md#7-connect-mcp-clients-through-easyauth) for detailed instructions.
 
