@@ -27,7 +27,18 @@ from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
 from az_scout import azure_api
+from az_scout.models.capacity_strategy import (
+    DataProfile,
+    PricingSpec,
+    ScaleSpec,
+    TimingSpec,
+    UsageProfile,
+    WorkloadConstraints,
+    WorkloadProfileRequest,
+)
 from az_scout.services.capacity_confidence import compute_capacity_confidence
+from az_scout.services.capacity_strategy_engine import recommend_capacity_strategy
+from az_scout.services.region_latency import get_rtt_ms
 
 logger = logging.getLogger(__name__)
 
@@ -290,4 +301,129 @@ def get_sku_pricing_detail(
         profile = azure_api.get_sku_profile(region, subscription_id, sku_name, tenant_id)
         if profile is not None:
             result["profile"] = profile
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def capacity_strategy(
+    workload_name: str,
+    subscription_id: str,
+    tenant_id: str | None = None,
+    sku: str | None = None,
+    instance_count: int = 1,
+    gpu_count_total: int | None = None,
+    data_residency: str | None = None,
+    allow_regions: list[str] | None = None,
+    deny_regions: list[str] | None = None,
+    require_zonal: bool = False,
+    max_inter_region_rtt_ms: int | None = None,
+    statefulness: str = "stateless",
+    cross_region_traffic: str = "low",
+    latency_sensitivity: str = "medium",
+    replication_mode: str = "unknown",
+    rpo_target_seconds: int | None = None,
+    rto_target_seconds: int | None = None,
+    deployment_urgency: str = "this_week",
+    deployment_window: str | None = None,
+    currency_code: str = "USD",
+    prefer_spot: bool = False,
+    max_hourly_budget: float | None = None,
+) -> str:
+    """Compute a deterministic Azure deployment strategy based on capacity signals and latency.
+
+    Evaluates candidate (region, SKU) combinations against zones, quotas,
+    restrictions, spot scores, pricing, confidence, and inter-region latency
+    to recommend a multi-region deployment strategy.
+
+    Must be used for any Azure deployment decision.  A single call returns
+    a complete strategy with business justification and technical details.
+
+    Strategies: single_region, active_active, active_passive,
+    sharded_multi_region, burst_overflow, time_window_deploy,
+    progressive_ramp.
+
+    Args:
+        workload_name: Human-readable name for the workload.
+        subscription_id: Subscription ID to query.
+        tenant_id: Optional tenant ID.
+        sku: Preferred VM SKU name (e.g. ``Standard_D2s_v3``).
+        instance_count: Number of VM instances needed.
+        gpu_count_total: Total GPU count needed (filters to GPU SKUs).
+        data_residency: ``"FR"``, ``"EU"``, or ``"ANY"``.
+        allow_regions: Explicit list of candidate regions.
+        deny_regions: Regions to exclude.
+        require_zonal: Require zone-redundant deployment.
+        max_inter_region_rtt_ms: Maximum acceptable RTT between regions.
+        statefulness: ``"stateless"``, ``"soft-state"``, or ``"stateful"``.
+        cross_region_traffic: ``"low"``, ``"medium"``, or ``"heavy"``.
+        latency_sensitivity: ``"low"``, ``"medium"``, or ``"high"``.
+        replication_mode: ``"none"``, ``"async"``, ``"sync"``, ``"multi-master"``, ``"unknown"``.
+        rpo_target_seconds: Recovery Point Objective in seconds.
+        rto_target_seconds: Recovery Time Objective in seconds.
+        deployment_urgency: ``"now"``, ``"today"``, or ``"this_week"``.
+        deployment_window: ``"anytime"``, ``"night_cet"``, or ``"weekend"``.
+        currency_code: ``"USD"`` or ``"EUR"``.
+        prefer_spot: Prefer Spot VMs.
+        max_hourly_budget: Maximum hourly budget.
+    """
+    profile = WorkloadProfileRequest(
+        workloadName=workload_name,
+        subscriptionId=subscription_id,
+        tenantId=tenant_id,
+        scale=ScaleSpec(sku=sku, instanceCount=instance_count, gpuCountTotal=gpu_count_total),
+        constraints=WorkloadConstraints(
+            dataResidency=data_residency,  # type: ignore[arg-type]
+            allowRegions=allow_regions,
+            denyRegions=deny_regions,
+            requireZonal=require_zonal,
+            maxInterRegionRttMs=max_inter_region_rtt_ms,
+        ),
+        usage=UsageProfile(
+            statefulness=statefulness,  # type: ignore[arg-type]
+            crossRegionTraffic=cross_region_traffic,  # type: ignore[arg-type]
+            latencySensitivity=latency_sensitivity,  # type: ignore[arg-type]
+        ),
+        data=DataProfile(
+            replicationMode=replication_mode,  # type: ignore[arg-type]
+            rpoTargetSeconds=rpo_target_seconds,
+            rtoTargetSeconds=rto_target_seconds,
+        ),
+        timing=TimingSpec(
+            deploymentUrgency=deployment_urgency,  # type: ignore[arg-type]
+            deploymentWindow=deployment_window,  # type: ignore[arg-type]
+        ),
+        pricing=PricingSpec(
+            currencyCode=currency_code,  # type: ignore[arg-type]
+            preferSpot=prefer_spot,
+            maxHourlyBudget=max_hourly_budget,
+        ),
+    )
+    result = recommend_capacity_strategy(profile)
+    return json.dumps(result.model_dump(), indent=2)
+
+
+@mcp.tool()
+def region_latency(
+    source_region: str,
+    target_region: str,
+) -> str:
+    """Return indicative RTT latency between two Azure regions.
+
+    Uses Microsoft published statistics from:
+    https://learn.microsoft.com/en-us/azure/networking/azure-network-latency
+
+    Args:
+        source_region: Source Azure region name (e.g. ``francecentral``).
+        target_region: Target Azure region name (e.g. ``westeurope``).
+    """
+    rtt = get_rtt_ms(source_region, target_region)
+    result = {
+        "sourceRegion": source_region,
+        "targetRegion": target_region,
+        "rttMs": rtt,
+        "source": "https://learn.microsoft.com/en-us/azure/networking/azure-network-latency",
+        "disclaimer": (
+            "Latency values are indicative and must be validated with in-tenant measurements."
+        ),
+    }
     return json.dumps(result, indent=2)
