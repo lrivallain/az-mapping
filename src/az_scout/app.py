@@ -19,9 +19,11 @@ from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
 from az_scout import __version__, azure_api
+from az_scout.models.capacity_strategy import WorkloadProfileRequest
 from az_scout.models.deployment_plan import DeploymentIntentRequest
 from az_scout.services.ai_chat import is_chat_enabled
 from az_scout.services.capacity_confidence import compute_capacity_confidence
+from az_scout.services.capacity_strategy_engine import recommend_capacity_strategy
 from az_scout.services.deployment_planner import plan_deployment
 
 _PKG_DIR = Path(__file__).resolve().parent
@@ -411,6 +413,35 @@ async def deployment_plan(body: DeploymentIntentRequest) -> JSONResponse:
         return JSONResponse(result.model_dump())
     except Exception as exc:
         logger.exception("Failed to generate deployment plan")
+        return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/capacity-strategy
+# ---------------------------------------------------------------------------
+
+
+@app.post(
+    "/api/capacity-strategy",
+    tags=["Strategy"],
+    summary="Compute a capacity deployment strategy",
+)
+async def capacity_strategy(body: WorkloadProfileRequest) -> JSONResponse:
+    """Compute a deterministic Azure deployment strategy.
+
+    Evaluates candidate regions and SKUs against capacity signals
+    (zones, quotas, restrictions, spot scores, prices, confidence)
+    and inter-region latency statistics to recommend a multi-region
+    deployment strategy.
+
+    A single call is sufficient for an agent to obtain a complete
+    deployment recommendation.
+    """
+    try:
+        result = recommend_capacity_strategy(body)
+        return JSONResponse(result.model_dump())
+    except Exception as exc:
+        logger.exception("Failed to compute capacity strategy")
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 
