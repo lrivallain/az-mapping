@@ -13,9 +13,18 @@ import time
 from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from functools import partial
 
 import requests
 from azure.identity import DefaultAzureCredential
+
+from az_scout.obo_auth import (
+    check_obo_tenant_auth,
+    get_obo_headers,
+    get_user_tenant_id,
+    get_user_token,
+    is_obo_configured,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,10 +58,15 @@ def _suppress_stderr() -> Generator[None]:
 
 
 def _get_headers(tenant_id: str | None = None) -> dict[str, str]:
-    """Return authorization headers using *DefaultAzureCredential*.
+    """Return authorization headers.
 
-    When *tenant_id* is provided the token is scoped to that tenant.
+    When OBO is configured and a user token is present, exchanges it for
+    ARM-scoped headers via the On-Behalf-Of flow.  Falls back to
+    *DefaultAzureCredential* otherwise.
     """
+    obo = get_obo_headers(tenant_id)
+    if obo is not None:
+        return obo
     kwargs: dict[str, str] = {}
     if tenant_id:
         kwargs["tenant_id"] = tenant_id
@@ -65,6 +79,9 @@ def _get_headers(tenant_id: str | None = None) -> dict[str, str]:
 
 def _get_default_tenant_id() -> str | None:
     """Extract the tenant ID from the current credential's token."""
+    obo_tid = get_user_tenant_id()
+    if obo_tid:
+        return obo_tid
     try:
         token = credential.get_token(f"{AZURE_MGMT_URL}/.default")
         payload = token.token.split(".")[1]
@@ -76,8 +93,14 @@ def _get_default_tenant_id() -> str | None:
         return None
 
 
-def _check_tenant_auth(tenant_id: str) -> bool:
-    """Return *True* if the credential can obtain a token for *tenant_id*."""
+def _check_tenant_auth(tenant_id: str, user_token: str | None = None) -> bool:
+    """Return *True* if the credential can obtain a token for *tenant_id*.
+
+    When *user_token* is provided and OBO is configured, uses the OBO flow
+    instead of DefaultAzureCredential.
+    """
+    if user_token and is_obo_configured():
+        return check_obo_tenant_auth(user_token, tenant_id)
     azure_logger = logging.getLogger("azure")
     previous_level = azure_logger.level
     azure_logger.setLevel(logging.CRITICAL)
@@ -134,10 +157,14 @@ def list_tenants(tenant_id: str | None = None) -> dict:
     Returns ``{"tenants": [...], "defaultTenantId": ...}``.
     Results are cached for ``_DISCOVERY_CACHE_TTL`` seconds.
     """
+    user_tok = get_user_token()
+    obo_active = bool(user_tok and is_obo_configured())
+
     cache_key = f"tenants:{tenant_id or ''}"
-    cached = _cached(cache_key)
-    if cached is not None:
-        return cached  # type: ignore[return-value]
+    if not obo_active:
+        cached = _cached(cache_key)
+        if cached is not None:
+            return cached  # type: ignore[return-value]
 
     headers = _get_headers(tenant_id)
     url = f"{AZURE_MGMT_URL}/tenants?api-version={AZURE_API_VERSION}"
@@ -145,9 +172,13 @@ def list_tenants(tenant_id: str | None = None) -> dict:
 
     tenant_ids = [t["tenantId"] for t in all_tenants]
 
+    # When OBO is active, pass the user token explicitly to the thread pool
+    # (ContextVars are not propagated to ThreadPoolExecutor workers).
+    check_fn = partial(_check_tenant_auth, user_token=user_tok if obo_active else None)
+
     # Suppress AzureCliCredential subprocess stderr noise across all threads.
     with _suppress_stderr(), ThreadPoolExecutor(max_workers=min(len(tenant_ids), 8)) as pool:
-        auth_results = dict(zip(tenant_ids, pool.map(_check_tenant_auth, tenant_ids), strict=True))
+        auth_results = dict(zip(tenant_ids, pool.map(check_fn, tenant_ids), strict=True))
 
     tenants = [
         {
@@ -161,7 +192,8 @@ def list_tenants(tenant_id: str | None = None) -> dict:
         "tenants": sorted(tenants, key=lambda x: x["name"].lower()),
         "defaultTenantId": _get_default_tenant_id(),
     }
-    _cache_set(cache_key, result)
+    if not obo_active:
+        _cache_set(cache_key, result)
     return result
 
 

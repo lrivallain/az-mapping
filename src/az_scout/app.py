@@ -21,6 +21,7 @@ from starlette.responses import StreamingResponse
 from az_scout import __version__, azure_api
 from az_scout.models.capacity_strategy import WorkloadProfileRequest
 from az_scout.models.deployment_plan import DeploymentIntentRequest
+from az_scout.obo_auth import OBOMiddleware
 from az_scout.services.ai_chat import is_chat_enabled
 from az_scout.services.capacity_confidence import compute_capacity_confidence
 from az_scout.services.capacity_strategy_engine import recommend_capacity_strategy
@@ -85,7 +86,7 @@ from az_scout.mcp_server import mcp as _mcp_server  # noqa: E402
 # "/mcp" endpoint (instead of the default "/mcp/mcp").
 _mcp_server.settings.streamable_http_path = "/"
 _mcp_starlette = _mcp_server.streamable_http_app()
-app.mount("/mcp", _mcp_starlette)
+app.mount("/mcp", OBOMiddleware(_mcp_starlette))  # type: ignore[arg-type]
 
 
 def _ensure_fresh_session_manager() -> None:

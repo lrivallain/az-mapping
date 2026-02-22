@@ -337,8 +337,93 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 A successful response confirms the token is valid and EasyAuth accepts it.
 
+## 8. Copilot Studio with user-context delegation (OBO)
+
+By default, the MCP server uses the Container App's managed identity to query Azure APIs. All users see the same data. To have the bot act **on behalf of the authenticated user** (showing their own subscriptions, quotas, and SKU availability), enable the On-Behalf-Of (OBO) flow.
+
+### a. Add Azure Service Management API permission
+
+The App Registration must be allowed to exchange user tokens for ARM-scoped tokens:
+
+```bash
+# Add delegated permission: Azure Service Management > user_impersonation
+az ad app permission add \
+  --id "$APP_ID" \
+  --api 797f4846-ba00-4fd7-ba43-dac1f8f63013 \
+  --api-permissions 41094075-9dad-400e-a0bd-54e686782033=Scope
+
+# Grant admin consent
+az ad app permission admin-consent --id "$APP_ID"
+```
+
+> **Note:** `797f4846-ba00-4fd7-ba43-dac1f8f63013` is the well-known App ID for the Azure Service Management API. `41094075-9dad-400e-a0bd-54e686782033` is its `user_impersonation` permission.
+
+You can also do this in the portal: **Entra ID > App registrations > az-scout > API permissions > Add a permission > APIs my organization uses > Azure Service Management > Delegated permissions > user_impersonation**. Then click **Grant admin consent**.
+
+### b. Set OBO environment variables
+
+Add these environment variables to the Container App:
+
+| Variable | Description |
+|---|---|
+| `AZURE_OBO_CLIENT_ID` | App Registration client ID (`$APP_ID`) |
+| `AZURE_OBO_CLIENT_SECRET` | App Registration client secret |
+| `AZURE_OBO_TENANT_ID` | Entra ID tenant ID |
+
+```bash
+az containerapp update \
+  -g rg-az-scout -n az-scout \
+  --set-env-vars \
+    "AZURE_OBO_CLIENT_ID=$APP_ID" \
+    "AZURE_OBO_CLIENT_SECRET=$APP_SECRET" \
+    "AZURE_OBO_TENANT_ID=$(az account show --query tenantId -o tsv)"
+```
+
+When all three variables are set, the MCP server exchanges incoming bearer tokens for ARM-scoped tokens via OBO. When not set, it falls back to `DefaultAzureCredential` (managed identity).
+
+### c. Configure Copilot Studio
+
+1. In Copilot Studio, add a new **MCP connector** and set the URL:
+
+   ```
+   https://az-scout.<env>.<region>.azurecontainerapps.io/mcp
+   ```
+
+2. Configure **OAuth 2.0 authentication**:
+
+   | Field | Value |
+   |---|---|
+   | Authentication type | OAuth 2.0 |
+   | Identity Provider | Microsoft Entra ID |
+   | Client ID | Your App Registration's `$APP_ID` |
+   | Client Secret | The secret from [step 3](#3-create-a-client-secret) |
+   | Tenant ID | Your Azure AD tenant ID |
+   | Scope | `api://<APP_ID>/user_impersonation` |
+   | Authorization URL | `https://login.microsoftonline.com/<TENANT_ID>/oauth2/v2.0/authorize` |
+   | Token URL | `https://login.microsoftonline.com/<TENANT_ID>/oauth2/v2.0/token` |
+
+3. Add the **redirect URI** that Copilot Studio provides to your App Registration:
+
+   ```bash
+   az ad app update --id "$APP_ID" \
+     --web-redirect-uris \
+       "https://az-scout.<env>.<region>.azurecontainerapps.io/.auth/login/aad/callback" \
+       "<REDIRECT_URI_FROM_COPILOT_STUDIO>"
+   ```
+
+### How it works
+
+1. User chats with the Copilot Studio bot
+2. Bot authenticates the user via Entra ID OAuth → gets a token with audience `api://<APP_ID>`
+3. Bot sends MCP requests to `/mcp` with `Authorization: Bearer <user_token>`
+4. EasyAuth validates the token
+5. OBO middleware captures the token from request headers
+6. Each MCP tool call exchanges it for an ARM token (`https://management.azure.com`) via OBO
+7. Azure API calls run under the user's identity → user sees their own subscriptions, quotas, SKUs
+
 ## Concepts
 
 - **App Registration** — defines *what* your application is (client ID, redirect URIs, secrets). Found under **Entra ID > App registrations**.
 - **Enterprise Application (Service Principal)** — controls *who* can access it (user assignments, conditional access). Auto-created when you run `az ad sp create`. Found under **Entra ID > Enterprise applications**.
 - **EasyAuth** — Azure's built-in authentication middleware. It intercepts requests before they reach your app, handling login/logout/token validation at the platform level. No code changes needed.
+- **On-Behalf-Of (OBO)** — An OAuth 2.0 flow where the server exchanges a user's access token for a new token scoped to a downstream API (here: Azure ARM). This lets the MCP server act as the user when querying Azure resources.

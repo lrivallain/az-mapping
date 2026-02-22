@@ -71,7 +71,7 @@ class TestListTenants:
         mock_resp.json.return_value = azure_response
         mock_resp.raise_for_status.return_value = None
 
-        def _auth_side_effect(tid):
+        def _auth_side_effect(tid, user_token=None):
             return tid == "tid-ok"
 
         with (
