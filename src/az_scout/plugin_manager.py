@@ -56,6 +56,7 @@ _DATA_DIR = _default_data_dir() / "plugins"
 _INSTALLED_FILE = _DATA_DIR / "installed.json"
 _AUDIT_FILE = _DATA_DIR / "audit.jsonl"
 _VENV_DIR = _default_data_dir() / ".venv-plugins"
+_UV_CACHE_DIR = _default_data_dir() / ".uv-cache"
 
 
 # ---------------------------------------------------------------------------
@@ -300,10 +301,13 @@ def ensure_plugins_venv() -> Path:
         uv = _find_uv()
         try:
             if uv:
+                env = os.environ.copy()
+                env["UV_CACHE_DIR"] = str(_UV_CACHE_DIR)
                 subprocess.run(  # noqa: S603
                     [uv, "venv", "--relocatable", str(_VENV_DIR)],
                     check=True,
                     capture_output=True,
+                    env=env,
                 )
             else:
                 logger.warning("uv not found; falling back to python -m venv")
@@ -329,6 +333,7 @@ def _venv_env(venv_path: Path) -> dict[str, str]:
     """Return an environment dict configured for the plugin venv."""
     env = os.environ.copy()
     env["VIRTUAL_ENV"] = str(venv_path)
+    env["UV_CACHE_DIR"] = str(_UV_CACHE_DIR)
     bin_dir = "Scripts" if platform.system() == "Windows" else "bin"
     env["PATH"] = str(venv_path / bin_dir) + os.pathsep + env.get("PATH", "")
     return env
