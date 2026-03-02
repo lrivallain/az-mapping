@@ -1,10 +1,15 @@
 """Plugin manager – validate, install, and uninstall az-scout plugins.
 
-Only public GitHub repositories are supported.  Installation pins to a
-resolved commit SHA so that builds are reproducible.  Plugins are installed
-into a flat ``plugin-packages`` directory via ``pip install --target``,
-avoiding the need for a virtual environment (which is problematic on
-filesystems that do not support symlinks, such as Azure Files / SMB).
+Plugins can be installed from two sources:
+
+* **GitHub** – public repositories, pinned to a resolved commit SHA for
+  reproducible builds.
+* **PyPI** – standard Python packages, pinned to a specific version.
+
+Plugins are installed into a flat ``plugin-packages`` directory via
+``pip install --target``, avoiding the need for a virtual environment
+(which is problematic on filesystems that do not support symlinks, such
+as Azure Files / SMB).
 
 Business logic lives here; FastAPI route handlers are thin wrappers.
 """
@@ -38,6 +43,10 @@ _GITHUB_URL_RE = re.compile(
     r"^https://github\.com/(?P<owner>[A-Za-z0-9_.-]+)/(?P<repo>[A-Za-z0-9_.-]+)/?$"
 )
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+_PYPI_API_BASE = "https://pypi.org/pypi"
+# PEP 508 / PEP 625 compatible name pattern
+_PYPI_PACKAGE_RE = re.compile(r"^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$")
 
 
 def _default_data_dir() -> Path:
@@ -82,8 +91,10 @@ class PluginValidationResult:
     repo: str
     repo_url: str
     ref: str
+    source: str = "github"  # "github" or "pypi"
     resolved_sha: str | None = None
     distribution_name: str | None = None
+    version: str | None = None  # resolved PyPI version
     entry_points: dict[str, str] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
@@ -98,6 +109,7 @@ class InstalledPluginRecord:
     entry_points: dict[str, str]
     installed_at: str  # ISO-8601
     actor: str
+    source: str = "github"  # "github" or "pypi"
     # Update-related fields (optional for backward compatibility)
     last_checked_at: str | None = None
     latest_ref: str | None = None
@@ -124,6 +136,11 @@ def parse_github_repo_url(repo_url: str) -> GitHubRepo | None:
 def is_commit_sha(ref: str) -> bool:
     """Return ``True`` if *ref* looks like a 40-hex-char commit SHA."""
     return bool(_SHA_RE.match(ref))
+
+
+def is_pypi_source(source: str) -> bool:
+    """Return ``True`` when *source* is a PyPI package name (not a URL)."""
+    return not source.startswith("http") and bool(_PYPI_PACKAGE_RE.match(source.strip()))
 
 
 # ---------------------------------------------------------------------------
@@ -191,9 +208,10 @@ def parse_pyproject_toml(toml_text: str) -> dict[str, Any]:
     return tomllib.loads(toml_text)
 
 
-def validate_plugin_repo(repo_url: str, ref: str) -> PluginValidationResult:
+def validate_plugin_repo(repo_url: str, ref: str = "") -> PluginValidationResult:
     """Validate that a GitHub repository is a conforming az-scout plugin.
 
+    When *ref* is empty the latest release or tag is resolved automatically.
     This fetches and inspects ``pyproject.toml`` without executing any code.
     """
     gh = parse_github_repo_url(repo_url)
@@ -206,6 +224,20 @@ def validate_plugin_repo(repo_url: str, ref: str) -> PluginValidationResult:
             ref=ref,
             errors=["Invalid GitHub URL. Expected https://github.com/<owner>/<repo>"],
         )
+
+    # Auto-resolve to latest when no ref is provided
+    if not ref:
+        try:
+            ref, _ = fetch_latest_ref(gh.owner, gh.repo)
+        except Exception as exc:
+            return PluginValidationResult(
+                ok=False,
+                owner=gh.owner,
+                repo=gh.repo,
+                repo_url=repo_url,
+                ref="",
+                errors=[f"Cannot determine latest version: {exc}"],
+            )
 
     result = PluginValidationResult(
         ok=False,
@@ -354,6 +386,7 @@ def _record_from_dict(data: dict[str, Any]) -> InstalledPluginRecord:
         "entry_points",
         "installed_at",
         "actor",
+        "source",
         "last_checked_at",
         "latest_ref",
         "latest_sha",
@@ -429,7 +462,9 @@ def install_plugin(
         )
         return False, validation.warnings, validation.errors
 
-    sha = validation.resolved_sha or ref
+    # Use the ref resolved by validation (may differ from input when auto-resolved)
+    resolved_ref = validation.ref
+    sha = validation.resolved_sha or resolved_ref
     clean_url = repo_url.rstrip("/")
     if not clean_url.endswith(".git"):
         clean_url += ".git"
@@ -445,7 +480,7 @@ def install_plugin(
             client_ip,
             user_agent,
             repo_url=repo_url,
-            ref=ref,
+            ref=resolved_ref,
             resolved_sha=sha,
             distribution_name=validation.distribution_name,
             success=False,
@@ -462,7 +497,7 @@ def install_plugin(
         InstalledPluginRecord(
             distribution_name=dist_name,
             repo_url=repo_url,
-            ref=ref,
+            ref=resolved_ref,
             resolved_sha=sha,
             entry_points=validation.entry_points,
             installed_at=datetime.now(UTC).isoformat(),
@@ -477,7 +512,7 @@ def install_plugin(
         client_ip,
         user_agent,
         repo_url=repo_url,
-        ref=ref,
+        ref=resolved_ref,
         resolved_sha=sha,
         distribution_name=dist_name,
         success=True,
@@ -528,6 +563,206 @@ def fetch_latest_ref(owner: str, repo: str) -> tuple[str, str]:
 
 
 # ---------------------------------------------------------------------------
+# PyPI helpers
+# ---------------------------------------------------------------------------
+
+
+def fetch_pypi_metadata(
+    package_name: str,
+    version: str = "",
+) -> dict[str, Any]:
+    """Fetch package metadata from the PyPI JSON API.
+
+    When *version* is given, fetches that specific release.
+    Otherwise fetches the latest release.
+
+    Raises ``requests.HTTPError`` on network / 404 errors.
+    """
+    if version:
+        url = f"{_PYPI_API_BASE}/{package_name}/{version}/json"
+    else:
+        url = f"{_PYPI_API_BASE}/{package_name}/json"
+    resp = requests.get(url, timeout=15)
+    resp.raise_for_status()
+    data: dict[str, Any] = resp.json()
+    return data
+
+
+def validate_pypi_plugin(
+    package_name: str,
+    version: str = "",
+) -> PluginValidationResult:
+    """Validate that a PyPI package is a conforming az-scout plugin.
+
+    Checks:
+    - Package exists on PyPI
+    - Version exists (if specified)
+    - Naming convention ``az-scout-*`` (warning if not followed)
+    - ``az-scout`` listed as a dependency (warning if absent)
+    """
+    result = PluginValidationResult(
+        ok=False,
+        owner="",
+        repo="",
+        repo_url="",
+        ref=version,
+        source="pypi",
+        distribution_name=package_name,
+    )
+
+    # Validate package name format
+    if not _PYPI_PACKAGE_RE.match(package_name):
+        result.errors.append(
+            f"Invalid package name '{package_name}'. "
+            "Must contain only letters, digits, '.', '-', or '_'."
+        )
+        return result
+
+    # Fetch metadata from PyPI
+    try:
+        data = fetch_pypi_metadata(package_name, version)
+    except requests.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 404:
+            if version:
+                result.errors.append(
+                    f"Version '{version}' of package '{package_name}' not found on PyPI"
+                )
+            else:
+                result.errors.append(f"Package '{package_name}' not found on PyPI")
+        else:
+            result.errors.append(f"PyPI API error: {exc}")
+        return result
+    except Exception as exc:
+        result.errors.append(f"Cannot reach PyPI: {exc}")
+        return result
+
+    info: dict[str, Any] = data.get("info", {})
+    resolved_version: str = info.get("version", version)
+    result.ref = resolved_version
+    result.version = resolved_version
+
+    # Naming convention warning
+    normalized_name = package_name.lower().replace("_", "-").replace(".", "-")
+    if not normalized_name.startswith("az-scout-"):
+        result.warnings.append(
+            f"Package '{package_name}' does not follow the 'az-scout-*' naming convention"
+        )
+
+    # Check dependencies for az-scout
+    requires_dist: list[str] = info.get("requires_dist") or []
+    dep_names = [re.split(r"[<>=!~\[;@ ]", d)[0].strip().lower() for d in requires_dist]
+    if "az-scout" not in dep_names:
+        result.warnings.append(
+            "Package dependencies do not include 'az-scout' — plugin may fail at runtime"
+        )
+
+    # Check project URLs for homepage
+    project_urls: dict[str, str] = info.get("project_urls") or {}
+    if project_urls:
+        homepage = project_urls.get("Homepage", "")
+        if homepage:
+            result.repo_url = homepage
+
+    if not result.errors:
+        result.ok = True
+
+    return result
+
+
+def install_pypi_plugin(
+    package_name: str,
+    version: str,
+    actor: str,
+    client_ip: str,
+    user_agent: str,
+) -> tuple[bool, list[str], list[str]]:
+    """Validate and install a plugin from PyPI.
+
+    Returns ``(ok, warnings, errors)``.
+    """
+    validation = validate_pypi_plugin(package_name, version)
+    if not validation.ok:
+        _audit_event(
+            "install",
+            actor,
+            client_ip,
+            user_agent,
+            distribution_name=package_name,
+            ref=version,
+            success=False,
+            detail="; ".join(validation.errors),
+        )
+        return False, validation.warnings, validation.errors
+
+    resolved_version = validation.version or validation.ref or version
+    pip_spec = f"{package_name}=={resolved_version}" if resolved_version else package_name
+
+    pip_result = run_pip(["pip", "install", pip_spec])
+    if pip_result.returncode != 0:
+        err_msg = f"pip install failed: {pip_result.stderr.strip()}"
+        validation.errors.append(err_msg)
+        _audit_event(
+            "install",
+            actor,
+            client_ip,
+            user_agent,
+            distribution_name=package_name,
+            ref=resolved_version,
+            success=False,
+            detail=err_msg,
+        )
+        return False, validation.warnings, validation.errors
+
+    # Update installed.json
+    records = load_installed()
+    # Remove previous entry for the same distribution (upgrade scenario)
+    records = [r for r in records if r.distribution_name != package_name]
+    records.append(
+        InstalledPluginRecord(
+            distribution_name=package_name,
+            repo_url=validation.repo_url,
+            ref=resolved_version,
+            resolved_sha="",
+            entry_points=validation.entry_points,
+            installed_at=datetime.now(UTC).isoformat(),
+            actor=actor,
+            source="pypi",
+        )
+    )
+    save_installed(records)
+
+    _audit_event(
+        "install",
+        actor,
+        client_ip,
+        user_agent,
+        distribution_name=package_name,
+        ref=resolved_version,
+        success=True,
+        detail="installed from PyPI",
+    )
+
+    return True, validation.warnings, []
+
+
+def fetch_pypi_latest_version(package_name: str) -> str:
+    """Return the latest version string for a PyPI package.
+
+    Raises ``ValueError`` when the package is not found.
+    """
+    try:
+        data = fetch_pypi_metadata(package_name)
+    except requests.HTTPError:
+        msg = f"Package '{package_name}' not found on PyPI"
+        raise ValueError(msg)  # noqa: B904
+    version: str = data.get("info", {}).get("version", "")
+    if not version:
+        msg = f"Cannot determine latest version for '{package_name}'"
+        raise ValueError(msg)
+    return version
+
+
+# ---------------------------------------------------------------------------
 # Check for updates
 # ---------------------------------------------------------------------------
 
@@ -548,6 +783,7 @@ def check_updates(
     for record in records:
         info: dict[str, Any] = {
             "distribution_name": record.distribution_name,
+            "source": record.source,
             "repo_url": record.repo_url,
             "installed_ref": record.ref,
             "resolved_sha": record.resolved_sha,
@@ -557,26 +793,40 @@ def check_updates(
             "error": None,
         }
 
-        gh = parse_github_repo_url(record.repo_url)
-        if gh is None:
-            info["error"] = "Invalid GitHub URL"
-            results.append(info)
-            continue
+        if record.source == "pypi":
+            try:
+                latest_version = fetch_pypi_latest_version(record.distribution_name)
+                info["latest_ref"] = latest_version
+                info["update_available"] = latest_version != record.ref
 
-        try:
-            latest_ref, latest_sha = fetch_latest_ref(gh.owner, gh.repo)
-            info["latest_ref"] = latest_ref
-            info["latest_sha"] = latest_sha
-            info["update_available"] = latest_sha != record.resolved_sha
+                record.last_checked_at = now
+                record.latest_ref = latest_version
+                record.latest_sha = None
+                record.update_available = latest_version != record.ref
+            except Exception as exc:
+                info["error"] = str(exc)
+                record.last_checked_at = now
+        else:
+            gh = parse_github_repo_url(record.repo_url)
+            if gh is None:
+                info["error"] = "Invalid GitHub URL"
+                results.append(info)
+                continue
 
-            # Update the record in-place for persistence
-            record.last_checked_at = now
-            record.latest_ref = latest_ref
-            record.latest_sha = latest_sha
-            record.update_available = latest_sha != record.resolved_sha
-        except Exception as exc:
-            info["error"] = str(exc)
-            record.last_checked_at = now
+            try:
+                latest_ref, latest_sha = fetch_latest_ref(gh.owner, gh.repo)
+                info["latest_ref"] = latest_ref
+                info["latest_sha"] = latest_sha
+                info["update_available"] = latest_sha != record.resolved_sha
+
+                # Update the record in-place for persistence
+                record.last_checked_at = now
+                record.latest_ref = latest_ref
+                record.latest_sha = latest_sha
+                record.update_available = latest_sha != record.resolved_sha
+            except Exception as exc:
+                info["error"] = str(exc)
+                record.last_checked_at = now
 
         results.append(info)
 
@@ -606,7 +856,9 @@ def update_plugin(
     client_ip: str,
     user_agent: str,
 ) -> tuple[bool, list[str]]:
-    """Update a single plugin to the latest GitHub release/tag.
+    """Update a single plugin to the latest version.
+
+    Supports both GitHub-sourced and PyPI-sourced plugins.
 
     Returns ``(ok, errors)``.
     """
@@ -626,6 +878,23 @@ def update_plugin(
             detail=errors[0],
         )
         return False, errors
+
+    if record.source == "pypi":
+        return _update_pypi_plugin(record, records, actor, client_ip, user_agent)
+
+    return _update_github_plugin(record, records, actor, client_ip, user_agent)
+
+
+def _update_github_plugin(
+    record: InstalledPluginRecord,
+    records: list[InstalledPluginRecord],
+    actor: str,
+    client_ip: str,
+    user_agent: str,
+) -> tuple[bool, list[str]]:
+    """Update a GitHub-sourced plugin to the latest release/tag."""
+    errors: list[str] = []
+    distribution_name = record.distribution_name
 
     gh = parse_github_repo_url(record.repo_url)
     if gh is None:
@@ -691,6 +960,7 @@ def update_plugin(
 
     # Update the record
     now = datetime.now(UTC).isoformat()
+    old_ref = record.ref
     record.ref = latest_ref
     record.resolved_sha = latest_sha
     record.installed_at = now
@@ -711,7 +981,81 @@ def update_plugin(
         resolved_sha=latest_sha,
         distribution_name=distribution_name,
         success=True,
-        detail=f"Updated from {record.ref} to {latest_ref}",
+        detail=f"Updated from {old_ref} to {latest_ref}",
+    )
+
+    return True, []
+
+
+def _update_pypi_plugin(
+    record: InstalledPluginRecord,
+    records: list[InstalledPluginRecord],
+    actor: str,
+    client_ip: str,
+    user_agent: str,
+) -> tuple[bool, list[str]]:
+    """Update a PyPI-sourced plugin to the latest version."""
+    errors: list[str] = []
+    distribution_name = record.distribution_name
+
+    try:
+        latest_version = fetch_pypi_latest_version(distribution_name)
+    except Exception as exc:
+        errors.append(f"Cannot determine latest version: {exc}")
+        _audit_event(
+            "update",
+            actor,
+            client_ip,
+            user_agent,
+            distribution_name=distribution_name,
+            ref=record.ref,
+            success=False,
+            detail=errors[0],
+        )
+        return False, errors
+
+    if latest_version == record.ref:
+        errors.append("Already up to date")
+        return False, errors
+
+    pip_spec = f"{distribution_name}=={latest_version}"
+    result = run_pip(["pip", "install", "--upgrade", pip_spec])
+    if result.returncode != 0:
+        err_msg = f"pip install --upgrade failed: {result.stderr.strip()}"
+        errors.append(err_msg)
+        _audit_event(
+            "update",
+            actor,
+            client_ip,
+            user_agent,
+            distribution_name=distribution_name,
+            ref=record.ref,
+            success=False,
+            detail=err_msg,
+        )
+        return False, errors
+
+    old_ref = record.ref
+    now = datetime.now(UTC).isoformat()
+    record.ref = latest_version
+    record.resolved_sha = ""
+    record.installed_at = now
+    record.actor = actor
+    record.last_checked_at = now
+    record.latest_ref = latest_version
+    record.latest_sha = None
+    record.update_available = False
+    save_installed(records)
+
+    _audit_event(
+        "update",
+        actor,
+        client_ip,
+        user_agent,
+        distribution_name=distribution_name,
+        ref=latest_version,
+        success=True,
+        detail=f"Updated from {old_ref} to {latest_version} (PyPI)",
     )
 
     return True, []
@@ -732,41 +1076,69 @@ def update_all_plugins(
     details: list[dict[str, Any]] = []
 
     for record in records:
-        gh = parse_github_repo_url(record.repo_url)
-        if gh is None:
-            details.append(
-                {
-                    "distribution_name": record.distribution_name,
-                    "ok": False,
-                    "error": "Invalid GitHub URL",
-                }
-            )
-            failed += 1
-            continue
+        # Determine if update is needed based on source
+        if record.source == "pypi":
+            try:
+                latest_version = fetch_pypi_latest_version(record.distribution_name)
+            except Exception as exc:
+                details.append(
+                    {
+                        "distribution_name": record.distribution_name,
+                        "ok": False,
+                        "error": str(exc),
+                    }
+                )
+                failed += 1
+                continue
 
-        try:
-            latest_ref, latest_sha = fetch_latest_ref(gh.owner, gh.repo)
-        except Exception as exc:
-            details.append(
-                {
-                    "distribution_name": record.distribution_name,
-                    "ok": False,
-                    "error": str(exc),
-                }
-            )
-            failed += 1
-            continue
+            if latest_version == record.ref:
+                details.append(
+                    {
+                        "distribution_name": record.distribution_name,
+                        "ok": True,
+                        "skipped": True,
+                        "reason": "Already up to date",
+                    }
+                )
+                continue
+            latest_ref_display = latest_version
+        else:
+            gh = parse_github_repo_url(record.repo_url)
+            if gh is None:
+                details.append(
+                    {
+                        "distribution_name": record.distribution_name,
+                        "ok": False,
+                        "error": "Invalid GitHub URL",
+                    }
+                )
+                failed += 1
+                continue
 
-        if latest_sha == record.resolved_sha:
-            details.append(
-                {
-                    "distribution_name": record.distribution_name,
-                    "ok": True,
-                    "skipped": True,
-                    "reason": "Already up to date",
-                }
-            )
-            continue
+            try:
+                latest_ref, latest_sha = fetch_latest_ref(gh.owner, gh.repo)
+            except Exception as exc:
+                details.append(
+                    {
+                        "distribution_name": record.distribution_name,
+                        "ok": False,
+                        "error": str(exc),
+                    }
+                )
+                failed += 1
+                continue
+
+            if latest_sha == record.resolved_sha:
+                details.append(
+                    {
+                        "distribution_name": record.distribution_name,
+                        "ok": True,
+                        "skipped": True,
+                        "reason": "Already up to date",
+                    }
+                )
+                continue
+            latest_ref_display = latest_ref
 
         ok, errors = update_plugin(
             record.distribution_name,
@@ -780,7 +1152,7 @@ def update_all_plugins(
                 {
                     "distribution_name": record.distribution_name,
                     "ok": True,
-                    "updated_to": latest_ref,
+                    "updated_to": latest_ref_display,
                 }
             )
         else:
@@ -916,18 +1288,30 @@ def reconcile_installed_plugins() -> list[dict[str, str | bool]]:
             )
             continue
 
-        # Need to reinstall from pinned SHA
-        clean_url = record.repo_url.rstrip("/")
-        if not clean_url.endswith(".git"):
-            clean_url += ".git"
-        git_url = f"git+{clean_url}@{record.resolved_sha}"
-        logger.info(
-            "Reconciling plugin '%s' — reinstalling from %s",
-            record.distribution_name,
-            git_url,
-        )
-
-        result = run_pip(["pip", "install", git_url])
+        # Need to reinstall from pinned source
+        if record.source == "pypi":
+            pip_spec = (
+                f"{record.distribution_name}=={record.ref}"
+                if record.ref
+                else record.distribution_name
+            )
+            logger.info(
+                "Reconciling plugin '%s' — reinstalling from PyPI (%s)",
+                record.distribution_name,
+                pip_spec,
+            )
+            result = run_pip(["pip", "install", pip_spec])
+        else:
+            clean_url = record.repo_url.rstrip("/")
+            if not clean_url.endswith(".git"):
+                clean_url += ".git"
+            git_url = f"git+{clean_url}@{record.resolved_sha}"
+            logger.info(
+                "Reconciling plugin '%s' — reinstalling from %s",
+                record.distribution_name,
+                git_url,
+            )
+            result = run_pip(["pip", "install", git_url])
         if result.returncode == 0:
             results.append(
                 {

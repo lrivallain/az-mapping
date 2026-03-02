@@ -18,13 +18,13 @@ router = APIRouter(prefix="/api/plugins", tags=["Plugin Manager"])
 
 
 class ValidateRequest(BaseModel):
-    repo_url: str
-    ref: str
+    repo_url: str  # GitHub URL or PyPI package name
+    ref: str = ""  # Version/ref — optional for PyPI (auto-resolves to latest)
 
 
 class InstallRequest(BaseModel):
-    repo_url: str
-    ref: str
+    repo_url: str  # GitHub URL or PyPI package name
+    ref: str = ""  # Version/ref — optional for PyPI (auto-resolves to latest)
 
 
 class UninstallRequest(BaseModel):
@@ -66,24 +66,36 @@ async def list_plugins() -> JSONResponse:
     )
 
 
-@router.post("/validate", summary="Validate a plugin repository")
+@router.post("/validate", summary="Validate a plugin source")
 async def validate_plugin(body: ValidateRequest) -> JSONResponse:
-    """Fetch and validate ``pyproject.toml`` from a GitHub repository."""
-    result = plugin_manager.validate_plugin_repo(body.repo_url, body.ref)
+    """Validate a plugin from a GitHub repository or PyPI package."""
+    if plugin_manager.is_pypi_source(body.repo_url):
+        result = plugin_manager.validate_pypi_plugin(body.repo_url.strip(), body.ref.strip())
+    else:
+        result = plugin_manager.validate_plugin_repo(body.repo_url, body.ref.strip())
     return JSONResponse(asdict(result))
 
 
 @router.post("/install", summary="Install a plugin")
 async def install_plugin(body: InstallRequest, request: Request) -> JSONResponse:
-    """Install a plugin from a GitHub repository at a pinned SHA."""
+    """Install a plugin from a GitHub repository or PyPI."""
     actor, client_ip, user_agent = _actor(request)
-    ok, warnings, errors = plugin_manager.install_plugin(
-        body.repo_url,
-        body.ref,
-        actor,
-        client_ip,
-        user_agent,
-    )
+    if plugin_manager.is_pypi_source(body.repo_url):
+        ok, warnings, errors = plugin_manager.install_pypi_plugin(
+            body.repo_url.strip(),
+            body.ref.strip(),
+            actor,
+            client_ip,
+            user_agent,
+        )
+    else:
+        ok, warnings, errors = plugin_manager.install_plugin(
+            body.repo_url,
+            body.ref.strip(),
+            actor,
+            client_ip,
+            user_agent,
+        )
     if ok:
         reload_plugins(request.app, request.app.state.mcp_server)
     return JSONResponse(
