@@ -6,15 +6,15 @@
             <div class="card-header"><i class="bi bi-plus-circle me-1"></i>Add Plugin</div>
             <div class="card-body">
                 <div class="mb-2">
-                    <label for="pm-repo-url" class="form-label form-label-sm">Repository URL</label>
-                    <input type="url" class="form-control form-control-sm" id="pm-repo-url"
-                           placeholder="https://github.com/owner/repo">
-                    <div class="form-text">Only public github.com repositories</div>
+                    <label for="pm-repo-url" class="form-label form-label-sm">Plugin source</label>
+                    <input type="text" class="form-control form-control-sm" id="pm-repo-url"
+                           placeholder="PyPI package name or https://github.com/owner/repo">
+                    <div class="form-text">PyPI package name (e.g. <code>az-scout-example</code>) or public GitHub URL</div>
                 </div>
                 <div class="mb-3">
-                    <label for="pm-ref" class="form-label form-label-sm">Ref (tag or commit SHA)</label>
+                    <label for="pm-ref" class="form-label form-label-sm">Version / Ref <span class="text-body-secondary">(optional – defaults to latest)</span></label>
                     <input type="text" class="form-control form-control-sm" id="pm-ref"
-                           placeholder="v0.1.0 or 40-char SHA">
+                           placeholder="latest">
                 </div>
                 <div class="d-flex gap-2">
                     <button class="btn btn-outline-primary btn-sm" id="pm-validate-btn" onclick="pmValidate()">
@@ -71,11 +71,10 @@
                         <thead>
                             <tr>
                                 <th>Distribution</th>
-                                <th>Repo</th>
+                                <th>Source</th>
                                 <th>Installed</th>
                                 <th>Latest</th>
                                 <th>Status</th>
-                                <th>Installed at</th>
                                 <th></th>
                             </tr>
                         </thead>

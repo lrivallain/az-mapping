@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 from az_scout import plugin_manager
 from az_scout.plugin_manager import (
@@ -16,12 +17,17 @@ from az_scout.plugin_manager import (
     PluginValidationResult,
     _default_data_dir,
     fetch_latest_ref,
+    fetch_pypi_latest_version,
+    fetch_pypi_metadata,
+    install_pypi_plugin,
     is_commit_sha,
+    is_pypi_source,
     load_installed,
     parse_github_repo_url,
     reconcile_installed_plugins,
     save_installed,
     validate_plugin_repo,
+    validate_pypi_plugin,
 )
 
 # ---------------------------------------------------------------------------
@@ -1102,3 +1108,628 @@ class TestReconcileInstalledPlugins:
         # Second plugin succeeded
         assert results[1]["reinstalled"] is True
         assert results[1]["error"] == ""
+
+
+# ---------------------------------------------------------------------------
+# PyPI source detection
+# ---------------------------------------------------------------------------
+
+
+class TestIsPypiSource:
+    def test_pypi_package_name(self) -> None:
+        assert is_pypi_source("az-scout-example") is True
+
+    def test_pypi_package_with_dots(self) -> None:
+        assert is_pypi_source("az.scout.example") is True
+
+    def test_pypi_package_with_underscores(self) -> None:
+        assert is_pypi_source("az_scout_example") is True
+
+    def test_github_url(self) -> None:
+        assert is_pypi_source("https://github.com/owner/repo") is False
+
+    def test_http_url(self) -> None:
+        assert is_pypi_source("http://example.com/pkg") is False
+
+    def test_empty_string(self) -> None:
+        assert is_pypi_source("") is False
+
+    def test_single_char(self) -> None:
+        assert is_pypi_source("a") is True
+
+    def test_invalid_chars(self) -> None:
+        assert is_pypi_source("pkg name!") is False
+
+
+# ---------------------------------------------------------------------------
+# PyPI metadata / validation tests
+# ---------------------------------------------------------------------------
+
+
+SAMPLE_PYPI_RESPONSE: dict = {
+    "info": {
+        "name": "az-scout-example",
+        "version": "0.2.0",
+        "requires_dist": ["az-scout>=2025.1", "fastapi>=0.100"],
+        "project_urls": {"Homepage": "https://github.com/owner/az-scout-example"},
+    },
+    "releases": {
+        "0.1.0": [],
+        "0.2.0": [],
+    },
+}
+
+
+class TestFetchPypiMetadata:
+    def test_latest(self) -> None:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = SAMPLE_PYPI_RESPONSE
+        mock_resp.raise_for_status = MagicMock()
+        with patch("az_scout.plugin_manager.requests.get", return_value=mock_resp) as mock_get:
+            data = fetch_pypi_metadata("az-scout-example")
+
+        assert data == SAMPLE_PYPI_RESPONSE
+        mock_get.assert_called_once()
+        assert "/az-scout-example/json" in mock_get.call_args[0][0]
+
+    def test_specific_version(self) -> None:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = SAMPLE_PYPI_RESPONSE
+        mock_resp.raise_for_status = MagicMock()
+        with patch("az_scout.plugin_manager.requests.get", return_value=mock_resp) as mock_get:
+            fetch_pypi_metadata("az-scout-example", "0.1.0")
+
+        assert "/az-scout-example/0.1.0/json" in mock_get.call_args[0][0]
+
+
+class TestValidatePypiPlugin:
+    def test_valid_package(self) -> None:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = SAMPLE_PYPI_RESPONSE
+        mock_resp.raise_for_status = MagicMock()
+        with patch("az_scout.plugin_manager.requests.get", return_value=mock_resp):
+            result = validate_pypi_plugin("az-scout-example")
+
+        assert result.ok
+        assert result.source == "pypi"
+        assert result.distribution_name == "az-scout-example"
+        assert result.version == "0.2.0"
+        assert result.ref == "0.2.0"
+        assert result.repo_url == "https://github.com/owner/az-scout-example"
+        assert len(result.warnings) == 0
+
+    def test_valid_with_version(self) -> None:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "info": {
+                "name": "az-scout-example",
+                "version": "0.1.0",
+                "requires_dist": ["az-scout"],
+                "project_urls": {},
+            },
+        }
+        mock_resp.raise_for_status = MagicMock()
+        with patch("az_scout.plugin_manager.requests.get", return_value=mock_resp):
+            result = validate_pypi_plugin("az-scout-example", "0.1.0")
+
+        assert result.ok
+        assert result.version == "0.1.0"
+
+    def test_package_not_found(self) -> None:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+        http_err = requests.HTTPError(response=mock_resp)
+        mock_resp.raise_for_status.side_effect = http_err
+        with patch("az_scout.plugin_manager.requests.get", return_value=mock_resp):
+            result = validate_pypi_plugin("nonexistent-pkg")
+
+        assert not result.ok
+        assert any("not found on PyPI" in e for e in result.errors)
+
+    def test_version_not_found(self) -> None:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+        http_err = requests.HTTPError(response=mock_resp)
+        mock_resp.raise_for_status.side_effect = http_err
+        with patch("az_scout.plugin_manager.requests.get", return_value=mock_resp):
+            result = validate_pypi_plugin("az-scout-example", "99.99.99")
+
+        assert not result.ok
+        assert any("99.99.99" in e for e in result.errors)
+
+    def test_naming_warning(self) -> None:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "info": {
+                "name": "some-random-pkg",
+                "version": "1.0.0",
+                "requires_dist": ["az-scout"],
+                "project_urls": {},
+            },
+        }
+        mock_resp.raise_for_status = MagicMock()
+        with patch("az_scout.plugin_manager.requests.get", return_value=mock_resp):
+            result = validate_pypi_plugin("some-random-pkg")
+
+        assert result.ok
+        assert any("naming convention" in w for w in result.warnings)
+
+    def test_missing_dependency_warning(self) -> None:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {
+            "info": {
+                "name": "az-scout-example",
+                "version": "1.0.0",
+                "requires_dist": ["requests"],
+                "project_urls": {},
+            },
+        }
+        mock_resp.raise_for_status = MagicMock()
+        with patch("az_scout.plugin_manager.requests.get", return_value=mock_resp):
+            result = validate_pypi_plugin("az-scout-example")
+
+        assert result.ok
+        assert any("az-scout" in w for w in result.warnings)
+
+    def test_invalid_name(self) -> None:
+        result = validate_pypi_plugin("invalid name!")
+        assert not result.ok
+        assert any("Invalid package name" in e for e in result.errors)
+
+
+class TestFetchPypiLatestVersion:
+    def test_success(self) -> None:
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = SAMPLE_PYPI_RESPONSE
+        mock_resp.raise_for_status = MagicMock()
+        with patch("az_scout.plugin_manager.requests.get", return_value=mock_resp):
+            version = fetch_pypi_latest_version("az-scout-example")
+
+        assert version == "0.2.0"
+
+    def test_not_found(self) -> None:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+        http_err = requests.HTTPError(response=mock_resp)
+        mock_resp.raise_for_status.side_effect = http_err
+        with (
+            patch("az_scout.plugin_manager.requests.get", return_value=mock_resp),
+            pytest.raises(ValueError, match="not found"),
+        ):
+            fetch_pypi_latest_version("nonexistent")
+
+
+# ---------------------------------------------------------------------------
+# PyPI install tests
+# ---------------------------------------------------------------------------
+
+
+class TestInstallPypiPlugin:
+    def test_success(self, tmp_path: Path) -> None:
+        installed_file = tmp_path / "installed.json"
+        audit_file = tmp_path / "audit.jsonl"
+        installed_file.write_text("[]", encoding="utf-8")
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = SAMPLE_PYPI_RESPONSE
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_pip = MagicMock()
+        mock_pip.returncode = 0
+        mock_pip.stderr = ""
+
+        with (
+            patch.object(plugin_manager, "_INSTALLED_FILE", installed_file),
+            patch.object(plugin_manager, "_DATA_DIR", tmp_path),
+            patch.object(plugin_manager, "_AUDIT_FILE", audit_file),
+            patch("az_scout.plugin_manager.requests.get", return_value=mock_resp),
+            patch("az_scout.plugin_manager.run_pip", return_value=mock_pip),
+        ):
+            ok, warnings, errors = install_pypi_plugin(
+                "az-scout-example", "", "actor", "127.0.0.1", "test-agent"
+            )
+
+        assert ok is True
+        assert errors == []
+
+        loaded = json.loads(installed_file.read_text(encoding="utf-8"))
+        assert len(loaded) == 1
+        assert loaded[0]["distribution_name"] == "az-scout-example"
+        assert loaded[0]["source"] == "pypi"
+        assert loaded[0]["ref"] == "0.2.0"
+        assert loaded[0]["resolved_sha"] == ""
+
+    def test_validation_failure(self, tmp_path: Path) -> None:
+        installed_file = tmp_path / "installed.json"
+        audit_file = tmp_path / "audit.jsonl"
+        installed_file.write_text("[]", encoding="utf-8")
+
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+        http_err = requests.HTTPError(response=mock_resp)
+        mock_resp.raise_for_status.side_effect = http_err
+
+        with (
+            patch.object(plugin_manager, "_INSTALLED_FILE", installed_file),
+            patch.object(plugin_manager, "_DATA_DIR", tmp_path),
+            patch.object(plugin_manager, "_AUDIT_FILE", audit_file),
+            patch("az_scout.plugin_manager.requests.get", return_value=mock_resp),
+        ):
+            ok, warnings, errors = install_pypi_plugin(
+                "nonexistent", "", "actor", "127.0.0.1", "test-agent"
+            )
+
+        assert ok is False
+        assert len(errors) > 0
+
+    def test_pip_failure(self, tmp_path: Path) -> None:
+        installed_file = tmp_path / "installed.json"
+        audit_file = tmp_path / "audit.jsonl"
+        installed_file.write_text("[]", encoding="utf-8")
+
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = SAMPLE_PYPI_RESPONSE
+        mock_resp.raise_for_status = MagicMock()
+
+        mock_pip = MagicMock()
+        mock_pip.returncode = 1
+        mock_pip.stderr = "pip error"
+
+        with (
+            patch.object(plugin_manager, "_INSTALLED_FILE", installed_file),
+            patch.object(plugin_manager, "_DATA_DIR", tmp_path),
+            patch.object(plugin_manager, "_AUDIT_FILE", audit_file),
+            patch("az_scout.plugin_manager.requests.get", return_value=mock_resp),
+            patch("az_scout.plugin_manager.run_pip", return_value=mock_pip),
+        ):
+            ok, warnings, errors = install_pypi_plugin(
+                "az-scout-example", "", "actor", "127.0.0.1", "test-agent"
+            )
+
+        assert ok is False
+        assert any("pip" in e.lower() for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# PyPI check updates
+# ---------------------------------------------------------------------------
+
+
+class TestCheckUpdatesPypi:
+    def test_update_available(self, tmp_path: Path) -> None:
+        installed_file = tmp_path / "installed.json"
+        audit_file = tmp_path / "audit.jsonl"
+        data = [
+            {
+                "distribution_name": "az-scout-example",
+                "repo_url": "",
+                "ref": "0.1.0",
+                "resolved_sha": "",
+                "entry_points": {},
+                "installed_at": "2026-02-28T00:00:00+00:00",
+                "actor": "tester",
+                "source": "pypi",
+            }
+        ]
+        installed_file.write_text(json.dumps(data), encoding="utf-8")
+
+        with (
+            patch.object(plugin_manager, "_INSTALLED_FILE", installed_file),
+            patch.object(plugin_manager, "_DATA_DIR", tmp_path),
+            patch.object(plugin_manager, "_AUDIT_FILE", audit_file),
+            patch(
+                "az_scout.plugin_manager.fetch_pypi_latest_version",
+                return_value="0.2.0",
+            ),
+        ):
+            results = plugin_manager.check_updates("actor", "127.0.0.1", "test-agent")
+
+        assert len(results) == 1
+        assert results[0]["update_available"] is True
+        assert results[0]["latest_ref"] == "0.2.0"
+        assert results[0]["source"] == "pypi"
+
+    def test_up_to_date(self, tmp_path: Path) -> None:
+        installed_file = tmp_path / "installed.json"
+        audit_file = tmp_path / "audit.jsonl"
+        data = [
+            {
+                "distribution_name": "az-scout-example",
+                "repo_url": "",
+                "ref": "0.2.0",
+                "resolved_sha": "",
+                "entry_points": {},
+                "installed_at": "2026-02-28T00:00:00+00:00",
+                "actor": "tester",
+                "source": "pypi",
+            }
+        ]
+        installed_file.write_text(json.dumps(data), encoding="utf-8")
+
+        with (
+            patch.object(plugin_manager, "_INSTALLED_FILE", installed_file),
+            patch.object(plugin_manager, "_DATA_DIR", tmp_path),
+            patch.object(plugin_manager, "_AUDIT_FILE", audit_file),
+            patch(
+                "az_scout.plugin_manager.fetch_pypi_latest_version",
+                return_value="0.2.0",
+            ),
+        ):
+            results = plugin_manager.check_updates("actor", "127.0.0.1", "test-agent")
+
+        assert len(results) == 1
+        assert results[0]["update_available"] is False
+
+
+# ---------------------------------------------------------------------------
+# PyPI update tests
+# ---------------------------------------------------------------------------
+
+
+class TestUpdatePypiPlugin:
+    def test_update_success(self, tmp_path: Path) -> None:
+        installed_file = tmp_path / "installed.json"
+        audit_file = tmp_path / "audit.jsonl"
+        data = [
+            {
+                "distribution_name": "az-scout-example",
+                "repo_url": "",
+                "ref": "0.1.0",
+                "resolved_sha": "",
+                "entry_points": {},
+                "installed_at": "2026-02-28T00:00:00+00:00",
+                "actor": "tester",
+                "source": "pypi",
+            }
+        ]
+        installed_file.write_text(json.dumps(data), encoding="utf-8")
+
+        mock_pip = MagicMock()
+        mock_pip.returncode = 0
+        mock_pip.stderr = ""
+
+        with (
+            patch.object(plugin_manager, "_INSTALLED_FILE", installed_file),
+            patch.object(plugin_manager, "_DATA_DIR", tmp_path),
+            patch.object(plugin_manager, "_AUDIT_FILE", audit_file),
+            patch(
+                "az_scout.plugin_manager.fetch_pypi_latest_version",
+                return_value="0.2.0",
+            ),
+            patch("az_scout.plugin_manager.run_pip", return_value=mock_pip),
+        ):
+            ok, errors = plugin_manager.update_plugin(
+                "az-scout-example", "actor", "127.0.0.1", "test-agent"
+            )
+
+        assert ok is True
+        assert errors == []
+
+        loaded = json.loads(installed_file.read_text(encoding="utf-8"))
+        assert loaded[0]["ref"] == "0.2.0"
+        assert loaded[0]["source"] == "pypi"
+
+    def test_already_up_to_date(self, tmp_path: Path) -> None:
+        installed_file = tmp_path / "installed.json"
+        audit_file = tmp_path / "audit.jsonl"
+        data = [
+            {
+                "distribution_name": "az-scout-example",
+                "repo_url": "",
+                "ref": "0.2.0",
+                "resolved_sha": "",
+                "entry_points": {},
+                "installed_at": "2026-02-28T00:00:00+00:00",
+                "actor": "tester",
+                "source": "pypi",
+            }
+        ]
+        installed_file.write_text(json.dumps(data), encoding="utf-8")
+
+        with (
+            patch.object(plugin_manager, "_INSTALLED_FILE", installed_file),
+            patch.object(plugin_manager, "_DATA_DIR", tmp_path),
+            patch.object(plugin_manager, "_AUDIT_FILE", audit_file),
+            patch(
+                "az_scout.plugin_manager.fetch_pypi_latest_version",
+                return_value="0.2.0",
+            ),
+        ):
+            ok, errors = plugin_manager.update_plugin(
+                "az-scout-example", "actor", "127.0.0.1", "test-agent"
+            )
+
+        assert ok is False
+        assert any("up to date" in e.lower() for e in errors)
+
+
+# ---------------------------------------------------------------------------
+# PyPI reconciliation
+# ---------------------------------------------------------------------------
+
+
+class TestReconcilePypiPlugin:
+    def test_pypi_plugin_reinstalled(self, tmp_path: Path) -> None:
+        """A PyPI plugin missing from packages is reinstalled with pinned version."""
+        installed_file = tmp_path / "installed.json"
+        audit_file = tmp_path / "audit.jsonl"
+        data = [
+            {
+                "distribution_name": "az-scout-example",
+                "repo_url": "",
+                "ref": "0.2.0",
+                "resolved_sha": "",
+                "entry_points": {},
+                "installed_at": "2026-02-28T00:00:00+00:00",
+                "actor": "tester",
+                "source": "pypi",
+            }
+        ]
+        installed_file.write_text(json.dumps(data), encoding="utf-8")
+
+        mock_pip = MagicMock()
+        mock_pip.returncode = 0
+        mock_pip.stderr = ""
+
+        with (
+            patch.object(plugin_manager, "_INSTALLED_FILE", installed_file),
+            patch.object(plugin_manager, "_DATA_DIR", tmp_path),
+            patch.object(plugin_manager, "_AUDIT_FILE", audit_file),
+            patch("az_scout.plugin_manager._is_plugin_installed", return_value=False),
+            patch("az_scout.plugin_manager.run_pip", return_value=mock_pip) as mock_run,
+        ):
+            results = reconcile_installed_plugins()
+
+        assert len(results) == 1
+        assert results[0]["reinstalled"] is True
+        args = mock_run.call_args[0][0]
+        assert "install" in args
+        # Should use pip_spec like "az-scout-example==0.2.0"
+        assert "az-scout-example==0.2.0" in args[-1]
+
+
+# ---------------------------------------------------------------------------
+# PyPI route tests
+# ---------------------------------------------------------------------------
+
+
+class TestPypiRoutes:
+    def test_validate_pypi(self, client) -> None:  # type: ignore[no-untyped-def]
+        result = PluginValidationResult(
+            ok=True,
+            owner="",
+            repo="",
+            repo_url="",
+            ref="0.2.0",
+            source="pypi",
+            distribution_name="az-scout-example",
+            version="0.2.0",
+        )
+        with patch(
+            "az_scout.routes.plugin_manager.validate_pypi_plugin",
+            return_value=result,
+        ):
+            resp = client.post(
+                "/api/plugins/validate",
+                json={"repo_url": "az-scout-example"},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ok"] is True
+        assert data["source"] == "pypi"
+        assert data["version"] == "0.2.0"
+
+    def test_validate_github_without_ref_auto_resolves(self, client) -> None:  # type: ignore[no-untyped-def]
+        """GitHub sources without ref auto-resolve to latest."""
+        result = PluginValidationResult(
+            ok=True,
+            owner="owner",
+            repo="repo",
+            repo_url="https://github.com/owner/repo",
+            ref="v2.0.0",
+            resolved_sha=SAMPLE_SHA,
+            distribution_name="az-scout-example",
+            entry_points={"example": "mod:obj"},
+        )
+        with patch(
+            "az_scout.routes.plugin_manager.validate_plugin_repo",
+            return_value=result,
+        ):
+            resp = client.post(
+                "/api/plugins/validate",
+                json={"repo_url": "https://github.com/owner/repo"},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ok"] is True
+        assert data["ref"] == "v2.0.0"
+
+    def test_install_pypi(self, client) -> None:  # type: ignore[no-untyped-def]
+        with (
+            patch(
+                "az_scout.routes.plugin_manager.install_pypi_plugin",
+                return_value=(True, [], []),
+            ),
+            patch("az_scout.routes.reload_plugins"),
+        ):
+            resp = client.post(
+                "/api/plugins/install",
+                json={"repo_url": "az-scout-example"},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ok"] is True
+
+    def test_install_github_without_ref_auto_resolves(self, client) -> None:  # type: ignore[no-untyped-def]
+        """GitHub installs without ref auto-resolve to latest."""
+        with (
+            patch(
+                "az_scout.routes.plugin_manager.install_plugin",
+                return_value=(True, [], []),
+            ),
+            patch("az_scout.routes.reload_plugins"),
+        ):
+            resp = client.post(
+                "/api/plugins/install",
+                json={"repo_url": "https://github.com/owner/repo"},
+            )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ok"] is True
+
+
+# ---------------------------------------------------------------------------
+# Backward compatibility – source field
+# ---------------------------------------------------------------------------
+
+
+class TestSourceBackwardCompat:
+    def test_load_without_source_defaults_to_github(self, tmp_path: Path) -> None:
+        """Old installed.json without 'source' field should default to github."""
+        installed_file = tmp_path / "installed.json"
+        data = [
+            {
+                "distribution_name": "az-scout-example",
+                "repo_url": "https://github.com/owner/repo",
+                "ref": "v1.0.0",
+                "resolved_sha": SAMPLE_SHA,
+                "entry_points": {"example": "mod:obj"},
+                "installed_at": "2026-02-28T00:00:00+00:00",
+                "actor": "tester",
+            }
+        ]
+        installed_file.write_text(json.dumps(data), encoding="utf-8")
+
+        with patch.object(plugin_manager, "_INSTALLED_FILE", installed_file):
+            loaded = load_installed()
+
+        assert len(loaded) == 1
+        assert loaded[0].source == "github"
+
+    def test_load_with_pypi_source(self, tmp_path: Path) -> None:
+        """installed.json with source=pypi should load correctly."""
+        installed_file = tmp_path / "installed.json"
+        data = [
+            {
+                "distribution_name": "az-scout-example",
+                "repo_url": "",
+                "ref": "0.2.0",
+                "resolved_sha": "",
+                "entry_points": {},
+                "installed_at": "2026-02-28T00:00:00+00:00",
+                "actor": "tester",
+                "source": "pypi",
+            }
+        ]
+        installed_file.write_text(json.dumps(data), encoding="utf-8")
+
+        with patch.object(plugin_manager, "_INSTALLED_FILE", installed_file):
+            loaded = load_installed()
+
+        assert len(loaded) == 1
+        assert loaded[0].source == "pypi"
+        assert loaded[0].ref == "0.2.0"

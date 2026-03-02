@@ -11,6 +11,11 @@
     let initialized = false;
     let updateInfo = {};  // distribution_name → update status from /api/plugins/updates
 
+    /** Return true when the source string looks like a PyPI package name (not a URL). */
+    function isPypiSource(source) {
+        return source && !source.startsWith("http");
+    }
+
     const offcanvasEl = document.getElementById("pluginOffcanvas");
     if (!offcanvasEl) return;
 
@@ -74,14 +79,28 @@
         let anyUpdate = false;
         for (const r of list) {
             const tr = document.createElement("tr");
-            const shaShort = (r.resolved_sha || "").substring(0, 8);
-            const repoLink = r.repo_url
-                ? `<a href="${escHtml(r.repo_url)}" target="_blank" rel="noopener">${escHtml(r.repo_url)}</a>`
-                : "";
+            const pypi = r.source === "pypi";
             const installed = r.installed_at ? new Date(r.installed_at).toLocaleString() : "";
 
+            // Source column: PyPI link or GitHub repo link
+            let sourceLink;
+            if (pypi) {
+                const pypiUrl = `https://pypi.org/project/${encodeURIComponent(r.distribution_name)}/`;
+                sourceLink = `<a href="${escHtml(pypiUrl)}" target="_blank" rel="noopener"><i class="bi bi-box-seam me-1"></i>PyPI</a>`;
+            } else {
+                sourceLink = r.repo_url
+                    ? `<a href="${escHtml(r.repo_url)}" target="_blank" rel="noopener"><i class="bi bi-github me-1"></i>GitHub</a>`
+                    : "";
+            }
+
             // Installed version column
-            const installedVer = `${escHtml(r.ref)} <code title="${escHtml(r.resolved_sha)}">${escHtml(shaShort)}</code>`;
+            let installedVer;
+            if (pypi) {
+                installedVer = escHtml(r.ref);
+            } else {
+                const shaShort = (r.resolved_sha || "").substring(0, 8);
+                installedVer = `${escHtml(r.ref)} <code title="${escHtml(r.resolved_sha)}">${escHtml(shaShort)}</code>`;
+            }
 
             // Latest version column
             const info = updateInfo[r.distribution_name];
@@ -94,8 +113,12 @@
                     latestVer = '<span class="text-danger" title="' + escHtml(info.error) + '">Error</span>';
                     statusBadge = '<span class="badge bg-warning text-dark">Unknown</span>';
                 } else if (info.latest_ref) {
-                    const latestShaShort = (info.latest_sha || "").substring(0, 8);
-                    latestVer = `${escHtml(info.latest_ref)} <code title="${escHtml(info.latest_sha)}">${escHtml(latestShaShort)}</code>`;
+                    if (pypi) {
+                        latestVer = escHtml(info.latest_ref);
+                    } else {
+                        const latestShaShort = (info.latest_sha || "").substring(0, 8);
+                        latestVer = `${escHtml(info.latest_ref)} <code title="${escHtml(info.latest_sha)}">${escHtml(latestShaShort)}</code>`;
+                    }
                     if (info.update_available) {
                         statusBadge = '<span class="badge bg-info text-dark">Update available</span>';
                         updateBtn = ` <button class="btn btn-outline-info btn-sm py-0 px-1"
@@ -110,8 +133,12 @@
                 }
             } else if (r.update_available === true && r.latest_ref) {
                 // Use persisted data from installed.json
-                const latestShaShort = (r.latest_sha || "").substring(0, 8);
-                latestVer = `${escHtml(r.latest_ref)} <code title="${escHtml(r.latest_sha)}">${escHtml(latestShaShort)}</code>`;
+                if (pypi) {
+                    latestVer = escHtml(r.latest_ref);
+                } else {
+                    const latestShaShort = (r.latest_sha || "").substring(0, 8);
+                    latestVer = `${escHtml(r.latest_ref)} <code title="${escHtml(r.latest_sha)}">${escHtml(latestShaShort)}</code>`;
+                }
                 statusBadge = '<span class="badge bg-info text-dark">Update available</span>';
                 updateBtn = ` <button class="btn btn-outline-info btn-sm py-0 px-1"
                                       title="Update"
@@ -120,20 +147,23 @@
                               </button>`;
                 anyUpdate = true;
             } else if (r.update_available === false) {
-                const latestShaShort = (r.latest_sha || "").substring(0, 8);
                 if (r.latest_ref) {
-                    latestVer = `${escHtml(r.latest_ref)} <code title="${escHtml(r.latest_sha)}">${escHtml(latestShaShort)}</code>`;
+                    if (pypi) {
+                        latestVer = escHtml(r.latest_ref);
+                    } else {
+                        const latestShaShort = (r.latest_sha || "").substring(0, 8);
+                        latestVer = `${escHtml(r.latest_ref)} <code title="${escHtml(r.latest_sha)}">${escHtml(latestShaShort)}</code>`;
+                    }
                 }
                 statusBadge = '<span class="badge bg-success">Up to date</span>';
             }
 
             tr.innerHTML = `
                 <td><code>${escHtml(r.distribution_name)}</code></td>
-                <td>${repoLink}</td>
+                <td>${sourceLink}</td>
                 <td>${installedVer}</td>
                 <td>${latestVer}</td>
                 <td>${statusBadge}</td>
-                <td>${escHtml(installed)}</td>
                 <td class="text-nowrap">
                     ${updateBtn}
                     <button class="btn btn-outline-danger btn-sm py-0 px-1"
@@ -182,7 +212,7 @@
     window.pmValidate = async function () {
         const repoUrl = (document.getElementById("pm-repo-url").value || "").trim();
         const ref = (document.getElementById("pm-ref").value || "").trim();
-        if (!repoUrl || !ref) return;
+        if (!repoUrl) return;
 
         showSpinner("Validating…");
         hideResult();
@@ -206,7 +236,7 @@
     window.pmInstall = async function () {
         const repoUrl = (document.getElementById("pm-repo-url").value || "").trim();
         const ref = (document.getElementById("pm-ref").value || "").trim();
-        if (!repoUrl || !ref) return;
+        if (!repoUrl) return;
 
         showSpinner("Installing…");
         disableInstall();
@@ -341,7 +371,9 @@
 
         const lines = [];
         if (data.distribution_name) lines.push("<strong>Distribution:</strong> " + escHtml(data.distribution_name));
+        if (data.version) lines.push("<strong>Version:</strong> " + escHtml(data.version));
         if (data.resolved_sha) lines.push("<strong>SHA:</strong> <code>" + escHtml(data.resolved_sha) + "</code>");
+        if (data.source) lines.push("<strong>Source:</strong> " + escHtml(data.source === "pypi" ? "PyPI" : "GitHub"));
         if (data.entry_points && Object.keys(data.entry_points).length) {
             lines.push("<strong>Entry points:</strong> " +
                 Object.entries(data.entry_points).map(([k, v]) => escHtml(k) + " → " + escHtml(v)).join(", "));
