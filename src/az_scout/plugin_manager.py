@@ -56,7 +56,9 @@ _DATA_DIR = _default_data_dir() / "plugins"
 _INSTALLED_FILE = _DATA_DIR / "installed.json"
 _AUDIT_FILE = _DATA_DIR / "audit.jsonl"
 _PACKAGES_DIR = _default_data_dir() / "plugin-packages"
-_UV_CACHE_DIR = _default_data_dir() / ".uv-cache"
+# UV cache must live on a local filesystem — Azure Files (SMB) does not
+# support chmod/symlinks which breaks git operations inside the cache.
+_UV_CACHE_DIR = Path(tempfile.gettempdir()) / "az-scout-uv-cache"
 
 
 # ---------------------------------------------------------------------------
