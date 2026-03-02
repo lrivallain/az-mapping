@@ -2,8 +2,9 @@
 
 Only public GitHub repositories are supported.  Installation pins to a
 resolved commit SHA so that builds are reproducible.  Plugins are installed
-into a dedicated venv (`.venv-plugins`) to isolate them from the main
-application environment.
+into a flat ``plugin-packages`` directory via ``pip install --target``,
+avoiding the need for a virtual environment (which is problematic on
+filesystems that do not support symlinks, such as Azure Files / SMB).
 
 Business logic lives here; FastAPI route handlers are thin wrappers.
 """
@@ -12,7 +13,6 @@ import importlib.metadata
 import json
 import logging
 import os
-import platform
 import re
 import shutil
 import subprocess
@@ -55,7 +55,7 @@ def _default_data_dir() -> Path:
 _DATA_DIR = _default_data_dir() / "plugins"
 _INSTALLED_FILE = _DATA_DIR / "installed.json"
 _AUDIT_FILE = _DATA_DIR / "audit.jsonl"
-_VENV_DIR = _default_data_dir() / ".venv-plugins"
+_PACKAGES_DIR = _default_data_dir() / "plugin-packages"
 _UV_CACHE_DIR = _default_data_dir() / ".uv-cache"
 
 
@@ -279,7 +279,7 @@ def validate_plugin_repo(repo_url: str, ref: str) -> PluginValidationResult:
 
 
 # ---------------------------------------------------------------------------
-# Virtual environment management
+# Package management (--target approach)
 # ---------------------------------------------------------------------------
 
 
@@ -288,139 +288,38 @@ def _find_uv() -> str | None:
     return shutil.which("uv")
 
 
-def _venv_python(venv_path: Path) -> Path:
-    """Return the expected path to the Python interpreter inside a venv."""
-    bin_dir = "Scripts" if platform.system() == "Windows" else "bin"
-    name = "python.exe" if platform.system() == "Windows" else "python3"
-    return venv_path / bin_dir / name
-
-
-def _is_venv_healthy(venv_path: Path) -> bool:
-    """Check whether an existing venv has a usable Python interpreter.
-
-    Returns ``False`` when the directory exists but the interpreter is missing
-    (e.g. a broken symlink left over from a previous ``uv venv`` on an SMB
-    mount that does not support symbolic links).
-    """
-    python = _venv_python(venv_path)
-    # Path.exists() follows symlinks — returns False for dangling symlinks.
-    return python.exists()
-
-
-def _create_venv_directly(target: Path) -> None:
-    """Create a venv at *target* using ``python -m venv --copies``."""
-    subprocess.run(  # noqa: S603
-        [sys.executable, "-m", "venv", "--copies", str(target)],
-        check=True,
-        capture_output=True,
-    )
-
-
-def _create_venv_via_tempdir(target: Path) -> None:
-    """Create a venv in a local temp directory, then copy to *target*.
-
-    On Azure Files (SMB) mounts, ``python -m venv`` fails because Python
-    creates a ``lib64 -> lib`` symlink which SMB does not support.  By
-    creating the venv on a local filesystem first and copying with
-    ``symlinks=False``, all symlinks are resolved into real files/dirs.
-    """
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp_venv = Path(tmp) / "venv"
-        subprocess.run(  # noqa: S603
-            [sys.executable, "-m", "venv", "--copies", str(tmp_venv)],
-            check=True,
-            capture_output=True,
-        )
-        shutil.copytree(tmp_venv, target, symlinks=False)
-
-
-def ensure_plugins_venv() -> Path:
-    """Create the ``.venv-plugins`` virtual environment if it does not exist.
-
-    Always uses ``python -m venv --copies`` so the Python interpreter is a real
-    file, not a symlink.  This is required when the venv lives on an Azure Files
-    (SMB) mount which does not support symbolic links.  Package management still
-    uses ``uv pip`` when ``uv`` is available.
-
-    If the directory exists but the Python interpreter is missing or broken
-    (e.g. dangling symlink from a previous attempt), the venv is deleted and
-    recreated.
-
-    On filesystems that do not support symlinks (SMB/Azure Files), direct venv
-    creation may fail because Python creates a ``lib64 -> lib`` symlink.  In
-    that case the venv is built in a local temp directory and copied over with
-    symlinks resolved.
-
-    Returns the path to the venv directory.
-    """
-    if _VENV_DIR.exists() and not _is_venv_healthy(_VENV_DIR):
-        logger.warning(
-            "Plugin venv at %s is broken (Python interpreter missing) — recreating",
-            _VENV_DIR,
-        )
-        shutil.rmtree(_VENV_DIR, ignore_errors=True)
-
-    if not _VENV_DIR.exists():
-        logger.info("Creating plugin venv at %s", _VENV_DIR)
-        try:
-            _create_venv_directly(_VENV_DIR)
-        except subprocess.CalledProcessError:
-            # On SMB mounts the lib64 symlink creation fails.  Fall back to
-            # building in a temp dir (local fs) and copying with resolved
-            # symlinks.
-            logger.info(
-                "Direct venv creation failed (likely no symlink support); "
-                "creating via temp directory"
-            )
-            shutil.rmtree(_VENV_DIR, ignore_errors=True)
-            try:
-                _create_venv_via_tempdir(_VENV_DIR)
-            except (subprocess.CalledProcessError, OSError) as exc:
-                msg = str(exc)
-                if isinstance(exc, subprocess.CalledProcessError):
-                    msg = (
-                        exc.stderr.decode() if isinstance(exc.stderr, bytes) else (exc.stderr or "")
-                    )
-                logger.error("Failed to create plugin venv: %s", msg)
-                raise
-    return _VENV_DIR
-
-
-def _venv_bin(venv_path: Path, name: str) -> Path:
-    """Return the path to an executable in the plugin venv's bin directory."""
-    bin_dir = "Scripts" if platform.system() == "Windows" else "bin"
-    return venv_path / bin_dir / name
-
-
-def _venv_env(venv_path: Path) -> dict[str, str]:
-    """Return an environment dict configured for the plugin venv."""
+def _pip_env() -> dict[str, str]:
+    """Return an environment dict for pip/uv subprocess calls."""
     env = os.environ.copy()
-    env["VIRTUAL_ENV"] = str(venv_path)
     env["UV_CACHE_DIR"] = str(_UV_CACHE_DIR)
-    bin_dir = "Scripts" if platform.system() == "Windows" else "bin"
-    env["PATH"] = str(venv_path / bin_dir) + os.pathsep + env.get("PATH", "")
     return env
 
 
-def run_uv_in_venv(args: list[str]) -> subprocess.CompletedProcess[str]:
-    """Run a ``uv`` or ``pip`` command inside the plugin venv.
+def run_pip(args: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run a ``pip`` command that installs/uninstalls into the plugin packages dir.
 
-    Uses ``uv`` when available, otherwise delegates to the venv's ``pip``.
+    Uses ``uv pip`` when available, otherwise falls back to ``python -m pip``.
+    The ``--target`` flag is automatically appended for ``install`` commands.
+    For ``uninstall``, ``--target`` is used with ``uv``, while stdlib ``pip``
+    uses ``-y`` for non-interactive mode.
+
+    *args* follow the ``["pip", "<sub-command>", ...]`` convention
+    (the leading ``"pip"`` element is consumed by this function).
     """
-    venv_path = ensure_plugins_venv()
-    env = _venv_env(venv_path)
+    _PACKAGES_DIR.mkdir(parents=True, exist_ok=True)
+    env = _pip_env()
     uv = _find_uv()
+    sub_args = list(args[1:])  # drop leading "pip"
+
     if uv:
-        cmd: list[str] = [uv, *args]
+        cmd: list[str] = [uv, "pip", *sub_args, "--target", str(_PACKAGES_DIR)]
     else:
-        # Fall back to the venv's pip when uv is not installed.
-        # args[0] is "pip"; args[1:] are the sub-command and its options.
-        pip_args = list(args[1:])
-        # pip uninstall requires -y for non-interactive mode
-        if pip_args and pip_args[0] == "uninstall" and "-y" not in pip_args:
-            pip_args.insert(1, "-y")
-        cmd = [str(_venv_bin(venv_path, "pip")), *pip_args]
-    logger.info("Running in plugin venv: %s", " ".join(cmd))
+        # Fall back to python -m pip
+        if sub_args and sub_args[0] == "uninstall" and "-y" not in sub_args:
+            sub_args.insert(1, "-y")
+        cmd = [sys.executable, "-m", "pip", *sub_args, "--target", str(_PACKAGES_DIR)]
+
+    logger.info("Running plugin pip: %s", " ".join(cmd))
     return subprocess.run(  # noqa: S603
         cmd,
         capture_output=True,
@@ -530,9 +429,9 @@ def install_plugin(
         clean_url += ".git"
     git_url = f"git+{clean_url}@{sha}"
 
-    result = run_uv_in_venv(["pip", "install", git_url])
+    result = run_pip(["pip", "install", git_url])
     if result.returncode != 0:
-        err_msg = f"uv pip install failed: {result.stderr.strip()}"
+        err_msg = f"pip install failed: {result.stderr.strip()}"
         validation.errors.append(err_msg)
         _audit_event(
             "install",
@@ -766,9 +665,9 @@ def update_plugin(
         clean_url += ".git"
     git_url = f"git+{clean_url}@{latest_sha}"
 
-    result = run_uv_in_venv(["pip", "install", "--upgrade", git_url])
+    result = run_pip(["pip", "install", "--upgrade", git_url])
     if result.returncode != 0:
-        err_msg = f"uv pip install --upgrade failed: {result.stderr.strip()}"
+        err_msg = f"pip install --upgrade failed: {result.stderr.strip()}"
         errors.append(err_msg)
         _audit_event(
             "update",
@@ -927,9 +826,9 @@ def uninstall_plugin(
         )
         return False, errors
 
-    result = run_uv_in_venv(["pip", "uninstall", distribution_name])
+    result = run_pip(["pip", "uninstall", distribution_name])
     if result.returncode != 0:
-        err_msg = f"uv pip uninstall failed: {result.stderr.strip()}"
+        err_msg = f"pip uninstall failed: {result.stderr.strip()}"
         errors.append(err_msg)
         _audit_event(
             "uninstall",
@@ -967,12 +866,11 @@ def uninstall_plugin(
 # ---------------------------------------------------------------------------
 
 
-def _is_plugin_installed_in_venv(distribution_name: str) -> bool:
-    """Check whether a plugin distribution is importable from the plugin venv."""
-    sp_dirs = sorted(_VENV_DIR.glob("lib/python*/site-packages"))
-    if not sp_dirs:
+def _is_plugin_installed(distribution_name: str) -> bool:
+    """Check whether a plugin distribution is present in the packages directory."""
+    if not _PACKAGES_DIR.exists():
         return False
-    str_dirs = [str(d) for d in sp_dirs]
+    str_dirs = [str(_PACKAGES_DIR)]
     for dist in importlib.metadata.distributions(path=str_dirs):
         if dist.name == distribution_name:
             return True
@@ -980,13 +878,13 @@ def _is_plugin_installed_in_venv(distribution_name: str) -> bool:
 
 
 def reconcile_installed_plugins() -> list[dict[str, str | bool]]:
-    """Re-install plugins listed in ``installed.json`` but missing from the venv.
+    """Re-install plugins listed in ``installed.json`` but missing from packages.
 
     This is the "self-healing" step called at startup.  When the container is
-    ephemeral but ``installed.json`` lives on a durable volume, the venv may be
-    empty after a scale-to-zero restart.  For each missing plugin the function
-    runs ``uv pip install git+<repo>.git@<sha>`` using the exact pinned SHA so
-    the build is reproducible.
+    ephemeral but ``installed.json`` lives on a durable volume, the packages
+    directory may be empty after a scale-to-zero restart.  For each missing
+    plugin the function runs ``pip install --target`` using the exact pinned
+    SHA so the build is reproducible.
 
     Returns a list of per-plugin dicts with keys ``distribution_name``,
     ``reinstalled`` (bool), and ``error`` (str, empty on success).
@@ -997,9 +895,9 @@ def reconcile_installed_plugins() -> list[dict[str, str | bool]]:
 
     results: list[dict[str, str | bool]] = []
     for record in records:
-        if _is_plugin_installed_in_venv(record.distribution_name):
+        if _is_plugin_installed(record.distribution_name):
             logger.debug(
-                "Plugin '%s' already present in venv — skipping",
+                "Plugin '%s' already present in packages dir — skipping",
                 record.distribution_name,
             )
             results.append(
@@ -1022,7 +920,7 @@ def reconcile_installed_plugins() -> list[dict[str, str | bool]]:
             git_url,
         )
 
-        result = run_uv_in_venv(["pip", "install", git_url])
+        result = run_pip(["pip", "install", git_url])
         if result.returncode == 0:
             results.append(
                 {

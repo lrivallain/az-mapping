@@ -2,7 +2,7 @@
 
 import json
 import os
-import subprocess
+import sys
 import textwrap
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -639,7 +639,7 @@ class TestUpdatePlugin:
                 "az_scout.plugin_manager.fetch_latest_ref",
                 return_value=("v2.0.0", SAMPLE_SHA_2),
             ),
-            patch("az_scout.plugin_manager.run_uv_in_venv", return_value=mock_uv),
+            patch("az_scout.plugin_manager.run_pip", return_value=mock_uv),
         ):
             ok, errors = plugin_manager.update_plugin(
                 "az-scout-example", "actor", "127.0.0.1", "test-agent"
@@ -731,7 +731,7 @@ class TestUpdatePlugin:
                 "az_scout.plugin_manager.fetch_latest_ref",
                 return_value=("v2.0.0", SAMPLE_SHA_2),
             ),
-            patch("az_scout.plugin_manager.run_uv_in_venv", return_value=mock_uv),
+            patch("az_scout.plugin_manager.run_pip", return_value=mock_uv),
         ):
             ok, errors = plugin_manager.update_plugin(
                 "az-scout-example", "actor", "127.0.0.1", "test-agent"
@@ -784,7 +784,7 @@ class TestUpdateAllPlugins:
                 "az_scout.plugin_manager.fetch_latest_ref",
                 side_effect=mock_fetch_latest,
             ),
-            patch("az_scout.plugin_manager.run_uv_in_venv", return_value=mock_uv),
+            patch("az_scout.plugin_manager.run_pip", return_value=mock_uv),
         ):
             updated, failed, details = plugin_manager.update_all_plugins(
                 "actor", "127.0.0.1", "test-agent"
@@ -891,153 +891,84 @@ class TestUpdateRoutes:
 
 
 # ---------------------------------------------------------------------------
-# uv fallback tests
+# pip --target tests
 # ---------------------------------------------------------------------------
 
 
-class TestEnsurePluginsVenvFallback:
-    def test_creates_venv_with_copies(self, tmp_path: Path) -> None:
-        """ensure_plugins_venv creates venv directly when symlinks are supported."""
-        venv_dir = tmp_path / ".venv-plugins"
-
-        with (
-            patch.object(plugin_manager, "_VENV_DIR", venv_dir),
-            patch(
-                "az_scout.plugin_manager._create_venv_directly",
-                side_effect=lambda t: t.mkdir(parents=True),
-            ) as mock_direct,
-            patch("az_scout.plugin_manager._create_venv_via_tempdir") as mock_temp,
-        ):
-            result = plugin_manager.ensure_plugins_venv()
-
-        assert result == venv_dir
-        mock_direct.assert_called_once_with(venv_dir)
-        mock_temp.assert_not_called()
-
-    def test_falls_back_to_tempdir_on_symlink_error(self, tmp_path: Path) -> None:
-        """When direct creation fails (SMB), falls back to temp-dir approach."""
-        venv_dir = tmp_path / ".venv-plugins"
-
-        def make_healthy(target: Path) -> None:
-            target.mkdir(parents=True, exist_ok=True)
-            bin_dir = target / "bin"
-            bin_dir.mkdir(exist_ok=True)
-            (bin_dir / "python3").touch()
-
-        with (
-            patch.object(plugin_manager, "_VENV_DIR", venv_dir),
-            patch(
-                "az_scout.plugin_manager._create_venv_directly",
-                side_effect=subprocess.CalledProcessError(1, "venv"),
-            ),
-            patch(
-                "az_scout.plugin_manager._create_venv_via_tempdir",
-                side_effect=make_healthy,
-            ) as mock_temp,
-        ):
-            result = plugin_manager.ensure_plugins_venv()
-
-        assert result == venv_dir
-        mock_temp.assert_called_once_with(venv_dir)
-
-    def test_skips_creation_if_venv_exists(self, tmp_path: Path) -> None:
-        """If the venv directory already exists with a healthy interpreter, skip."""
-        venv_dir = tmp_path / ".venv-plugins"
-        venv_dir.mkdir()
-        # Create a fake python3 binary so the health check passes
-        bin_dir = venv_dir / "bin"
-        bin_dir.mkdir()
-        (bin_dir / "python3").touch()
-
-        with (
-            patch.object(plugin_manager, "_VENV_DIR", venv_dir),
-            patch("az_scout.plugin_manager._create_venv_directly") as mock_direct,
-            patch("az_scout.plugin_manager._create_venv_via_tempdir") as mock_temp,
-        ):
-            result = plugin_manager.ensure_plugins_venv()
-
-        assert result == venv_dir
-        mock_direct.assert_not_called()
-        mock_temp.assert_not_called()
-
-    def test_recreates_broken_venv(self, tmp_path: Path) -> None:
-        """If the venv directory exists but the interpreter is missing, recreate."""
-        venv_dir = tmp_path / ".venv-plugins"
-        venv_dir.mkdir()
-        # No python3 binary → broken venv
-
-        with (
-            patch.object(plugin_manager, "_VENV_DIR", venv_dir),
-            patch(
-                "az_scout.plugin_manager._create_venv_directly",
-                side_effect=lambda t: t.mkdir(parents=True, exist_ok=True),
-            ) as mock_direct,
-        ):
-            result = plugin_manager.ensure_plugins_venv()
-
-        assert result == venv_dir
-        mock_direct.assert_called_once_with(venv_dir)
-
-
-class TestRunUvInVenvFallback:
+class TestRunPip:
     def test_uses_uv_when_available(self, tmp_path: Path) -> None:
-        """When uv is found, run_uv_in_venv builds command with uv."""
-        venv_dir = tmp_path / ".venv-plugins"
-        (venv_dir / "bin").mkdir(parents=True)
-        (venv_dir / "bin" / "python3").touch()
+        """When uv is found, run_pip uses uv pip with --target."""
+        pkg_dir = tmp_path / "plugin-packages"
         mock_proc = MagicMock()
         mock_proc.returncode = 0
 
         with (
-            patch.object(plugin_manager, "_VENV_DIR", venv_dir),
+            patch.object(plugin_manager, "_PACKAGES_DIR", pkg_dir),
             patch("az_scout.plugin_manager._find_uv", return_value="/usr/bin/uv"),
             patch("az_scout.plugin_manager.subprocess.run", return_value=mock_proc) as mock_run,
         ):
-            plugin_manager.run_uv_in_venv(["pip", "install", "some-pkg"])
+            plugin_manager.run_pip(["pip", "install", "some-pkg"])
 
         cmd = mock_run.call_args[0][0]
         assert cmd[0] == "/usr/bin/uv"
         assert cmd[1] == "pip"
-        assert cmd[2] == "install"
+        assert "install" in cmd
+        assert "--target" in cmd
+        assert str(pkg_dir) in cmd
 
-    def test_uses_pip_fallback_for_install(self, tmp_path: Path) -> None:
-        """When uv is not found, run_uv_in_venv delegates to venv pip."""
-        venv_dir = tmp_path / ".venv-plugins"
-        (venv_dir / "bin").mkdir(parents=True)
-        (venv_dir / "bin" / "python3").touch()
+    def test_uses_python_pip_fallback(self, tmp_path: Path) -> None:
+        """When uv is not found, run_pip uses python -m pip with --target."""
+        pkg_dir = tmp_path / "plugin-packages"
         mock_proc = MagicMock()
         mock_proc.returncode = 0
 
         with (
-            patch.object(plugin_manager, "_VENV_DIR", venv_dir),
+            patch.object(plugin_manager, "_PACKAGES_DIR", pkg_dir),
             patch("az_scout.plugin_manager._find_uv", return_value=None),
             patch("az_scout.plugin_manager.subprocess.run", return_value=mock_proc) as mock_run,
         ):
-            plugin_manager.run_uv_in_venv(["pip", "install", "some-pkg"])
+            plugin_manager.run_pip(["pip", "install", "some-pkg"])
 
         cmd = mock_run.call_args[0][0]
-        assert str(venv_dir / "bin" / "pip") in cmd[0]
-        assert cmd[1] == "install"
-        assert cmd[2] == "some-pkg"
+        assert cmd[0] == sys.executable
+        assert cmd[1] == "-m"
+        assert cmd[2] == "pip"
+        assert "install" in cmd
+        assert "--target" in cmd
+        assert str(pkg_dir) in cmd
 
     def test_pip_fallback_uninstall_adds_y_flag(self, tmp_path: Path) -> None:
         """Fallback pip uninstall automatically adds -y for non-interactive mode."""
-        venv_dir = tmp_path / ".venv-plugins"
-        (venv_dir / "bin").mkdir(parents=True)
-        (venv_dir / "bin" / "python3").touch()
+        pkg_dir = tmp_path / "plugin-packages"
         mock_proc = MagicMock()
         mock_proc.returncode = 0
 
         with (
-            patch.object(plugin_manager, "_VENV_DIR", venv_dir),
+            patch.object(plugin_manager, "_PACKAGES_DIR", pkg_dir),
             patch("az_scout.plugin_manager._find_uv", return_value=None),
             patch("az_scout.plugin_manager.subprocess.run", return_value=mock_proc) as mock_run,
         ):
-            plugin_manager.run_uv_in_venv(["pip", "uninstall", "some-pkg"])
+            plugin_manager.run_pip(["pip", "uninstall", "some-pkg"])
 
         cmd = mock_run.call_args[0][0]
         assert "-y" in cmd
         assert "some-pkg" in cmd
+        assert "--target" in cmd
+
+    def test_creates_packages_dir(self, tmp_path: Path) -> None:
+        """run_pip creates the packages directory if it does not exist."""
+        pkg_dir = tmp_path / "plugin-packages"
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+
+        with (
+            patch.object(plugin_manager, "_PACKAGES_DIR", pkg_dir),
+            patch("az_scout.plugin_manager._find_uv", return_value="/usr/bin/uv"),
+            patch("az_scout.plugin_manager.subprocess.run", return_value=mock_proc),
+        ):
+            plugin_manager.run_pip(["pip", "install", "some-pkg"])
+
+        assert pkg_dir.exists()
 
 
 # ---------------------------------------------------------------------------
@@ -1074,7 +1005,7 @@ class TestReconcileInstalledPlugins:
         with (
             patch.object(plugin_manager, "_INSTALLED_FILE", installed_file),
             patch(
-                "az_scout.plugin_manager._is_plugin_installed_in_venv",
+                "az_scout.plugin_manager._is_plugin_installed",
                 return_value=True,
             ),
         ):
@@ -1085,24 +1016,24 @@ class TestReconcileInstalledPlugins:
         assert results[0]["error"] == ""
 
     def test_missing_plugin_reinstalled(self, tmp_path: Path) -> None:
-        """A plugin missing from the venv is reinstalled from pinned SHA."""
+        """A plugin missing from packages dir is reinstalled from pinned SHA."""
         installed_file = self._make_installed_json(tmp_path, [self._sample_record()])
         audit_file = tmp_path / "audit.jsonl"
-        mock_uv = MagicMock()
-        mock_uv.returncode = 0
-        mock_uv.stderr = ""
+        mock_pip = MagicMock()
+        mock_pip.returncode = 0
+        mock_pip.stderr = ""
 
         with (
             patch.object(plugin_manager, "_INSTALLED_FILE", installed_file),
             patch.object(plugin_manager, "_AUDIT_FILE", audit_file),
             patch.object(plugin_manager, "_DATA_DIR", tmp_path),
             patch(
-                "az_scout.plugin_manager._is_plugin_installed_in_venv",
+                "az_scout.plugin_manager._is_plugin_installed",
                 return_value=False,
             ),
             patch(
-                "az_scout.plugin_manager.run_uv_in_venv",
-                return_value=mock_uv,
+                "az_scout.plugin_manager.run_pip",
+                return_value=mock_pip,
             ) as mock_run,
         ):
             results = reconcile_installed_plugins()
@@ -1134,15 +1065,11 @@ class TestReconcileInstalledPlugins:
         mock_ok.returncode = 0
         mock_ok.stderr = ""
 
-        def venv_check(name: str) -> bool:
-            return False  # both missing
-
         call_count = 0
 
         def run_side_effect(args: list[str]) -> MagicMock:
             nonlocal call_count
             call_count += 1
-            # First call fails, second succeeds
             return mock_fail if call_count == 1 else mock_ok
 
         with (
@@ -1150,11 +1077,11 @@ class TestReconcileInstalledPlugins:
             patch.object(plugin_manager, "_AUDIT_FILE", audit_file),
             patch.object(plugin_manager, "_DATA_DIR", tmp_path),
             patch(
-                "az_scout.plugin_manager._is_plugin_installed_in_venv",
-                side_effect=venv_check,
+                "az_scout.plugin_manager._is_plugin_installed",
+                side_effect=lambda name: False,
             ),
             patch(
-                "az_scout.plugin_manager.run_uv_in_venv",
+                "az_scout.plugin_manager.run_pip",
                 side_effect=run_side_effect,
             ),
         ):

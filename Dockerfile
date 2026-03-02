@@ -32,14 +32,15 @@ WORKDIR /app
 COPY --from=builder /build/dist/*.whl /tmp/
 RUN pip install --no-cache-dir /tmp/*.whl && rm /tmp/*.whl
 
-# Install uv so the plugin manager can create venvs and install plugins
+# Install uv so the plugin manager can install packages quickly
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Plugin data directory.
 # In container deployments, mount a persistent volume at /app/data so that
-# installed.json (plugin registry) and .venv-plugins survive restarts.
+# installed.json (plugin registry) and plugin-packages survive restarts.
 # At startup the app reconciles: plugins listed in installed.json but missing
-# from the venv are automatically reinstalled from their pinned commit SHA.
+# from the packages directory are automatically reinstalled from their pinned
+# commit SHA.
 ENV AZ_SCOUT_DATA_DIR=/app/data
 RUN mkdir -p /app/data && chown scout:scout /app/data
 VOLUME /app/data
