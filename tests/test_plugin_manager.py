@@ -2,7 +2,7 @@
 
 import json
 import os
-import sys
+import subprocess
 import textwrap
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -897,40 +897,48 @@ class TestUpdateRoutes:
 
 class TestEnsurePluginsVenvFallback:
     def test_creates_venv_with_copies(self, tmp_path: Path) -> None:
-        """ensure_plugins_venv always uses python -m venv --copies (SMB safe)."""
+        """ensure_plugins_venv creates venv directly when symlinks are supported."""
         venv_dir = tmp_path / ".venv-plugins"
-        mock_proc = MagicMock()
 
         with (
             patch.object(plugin_manager, "_VENV_DIR", venv_dir),
-            patch("az_scout.plugin_manager.subprocess.run", return_value=mock_proc) as mock_run,
+            patch(
+                "az_scout.plugin_manager._create_venv_directly",
+                side_effect=lambda t: t.mkdir(parents=True),
+            ) as mock_direct,
+            patch("az_scout.plugin_manager._create_venv_via_tempdir") as mock_temp,
         ):
             result = plugin_manager.ensure_plugins_venv()
 
         assert result == venv_dir
-        cmd = mock_run.call_args[0][0]
-        assert cmd[0] == sys.executable
-        assert "-m" in cmd
-        assert "venv" in cmd
-        assert "--copies" in cmd
+        mock_direct.assert_called_once_with(venv_dir)
+        mock_temp.assert_not_called()
 
-    def test_creates_venv_with_stdlib_fallback(self, tmp_path: Path) -> None:
-        """ensure_plugins_venv uses python -m venv --copies (no uv dependency)."""
+    def test_falls_back_to_tempdir_on_symlink_error(self, tmp_path: Path) -> None:
+        """When direct creation fails (SMB), falls back to temp-dir approach."""
         venv_dir = tmp_path / ".venv-plugins"
-        mock_proc = MagicMock()
+
+        def make_healthy(target: Path) -> None:
+            target.mkdir(parents=True, exist_ok=True)
+            bin_dir = target / "bin"
+            bin_dir.mkdir(exist_ok=True)
+            (bin_dir / "python3").touch()
 
         with (
             patch.object(plugin_manager, "_VENV_DIR", venv_dir),
-            patch("az_scout.plugin_manager.subprocess.run", return_value=mock_proc) as mock_run,
+            patch(
+                "az_scout.plugin_manager._create_venv_directly",
+                side_effect=subprocess.CalledProcessError(1, "venv"),
+            ),
+            patch(
+                "az_scout.plugin_manager._create_venv_via_tempdir",
+                side_effect=make_healthy,
+            ) as mock_temp,
         ):
             result = plugin_manager.ensure_plugins_venv()
 
         assert result == venv_dir
-        cmd = mock_run.call_args[0][0]
-        assert cmd[0] == sys.executable
-        assert "-m" in cmd
-        assert "venv" in cmd
-        assert "--copies" in cmd
+        mock_temp.assert_called_once_with(venv_dir)
 
     def test_skips_creation_if_venv_exists(self, tmp_path: Path) -> None:
         """If the venv directory already exists with a healthy interpreter, skip."""
@@ -943,32 +951,32 @@ class TestEnsurePluginsVenvFallback:
 
         with (
             patch.object(plugin_manager, "_VENV_DIR", venv_dir),
-            patch("az_scout.plugin_manager.subprocess.run") as mock_run,
+            patch("az_scout.plugin_manager._create_venv_directly") as mock_direct,
+            patch("az_scout.plugin_manager._create_venv_via_tempdir") as mock_temp,
         ):
             result = plugin_manager.ensure_plugins_venv()
 
         assert result == venv_dir
-        mock_run.assert_not_called()
+        mock_direct.assert_not_called()
+        mock_temp.assert_not_called()
 
     def test_recreates_broken_venv(self, tmp_path: Path) -> None:
         """If the venv directory exists but the interpreter is missing, recreate."""
         venv_dir = tmp_path / ".venv-plugins"
         venv_dir.mkdir()
         # No python3 binary → broken venv
-        mock_proc = MagicMock()
 
         with (
             patch.object(plugin_manager, "_VENV_DIR", venv_dir),
-            patch("az_scout.plugin_manager.subprocess.run", return_value=mock_proc) as mock_run,
+            patch(
+                "az_scout.plugin_manager._create_venv_directly",
+                side_effect=lambda t: t.mkdir(parents=True, exist_ok=True),
+            ) as mock_direct,
         ):
             result = plugin_manager.ensure_plugins_venv()
 
         assert result == venv_dir
-        # Should have called subprocess.run to recreate
-        mock_run.assert_called_once()
-        cmd = mock_run.call_args[0][0]
-        assert cmd[0] == sys.executable
-        assert "--copies" in cmd
+        mock_direct.assert_called_once_with(venv_dir)
 
 
 class TestRunUvInVenvFallback:

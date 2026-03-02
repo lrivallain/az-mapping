@@ -307,6 +307,33 @@ def _is_venv_healthy(venv_path: Path) -> bool:
     return python.exists()
 
 
+def _create_venv_directly(target: Path) -> None:
+    """Create a venv at *target* using ``python -m venv --copies``."""
+    subprocess.run(  # noqa: S603
+        [sys.executable, "-m", "venv", "--copies", str(target)],
+        check=True,
+        capture_output=True,
+    )
+
+
+def _create_venv_via_tempdir(target: Path) -> None:
+    """Create a venv in a local temp directory, then copy to *target*.
+
+    On Azure Files (SMB) mounts, ``python -m venv`` fails because Python
+    creates a ``lib64 -> lib`` symlink which SMB does not support.  By
+    creating the venv on a local filesystem first and copying with
+    ``symlinks=False``, all symlinks are resolved into real files/dirs.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_venv = Path(tmp) / "venv"
+        subprocess.run(  # noqa: S603
+            [sys.executable, "-m", "venv", "--copies", str(tmp_venv)],
+            check=True,
+            capture_output=True,
+        )
+        shutil.copytree(tmp_venv, target, symlinks=False)
+
+
 def ensure_plugins_venv() -> Path:
     """Create the ``.venv-plugins`` virtual environment if it does not exist.
 
@@ -318,6 +345,11 @@ def ensure_plugins_venv() -> Path:
     If the directory exists but the Python interpreter is missing or broken
     (e.g. dangling symlink from a previous attempt), the venv is deleted and
     recreated.
+
+    On filesystems that do not support symlinks (SMB/Azure Files), direct venv
+    creation may fail because Python creates a ``lib64 -> lib`` symlink.  In
+    that case the venv is built in a local temp directory and copied over with
+    symlinks resolved.
 
     Returns the path to the venv directory.
     """
@@ -331,15 +363,26 @@ def ensure_plugins_venv() -> Path:
     if not _VENV_DIR.exists():
         logger.info("Creating plugin venv at %s", _VENV_DIR)
         try:
-            subprocess.run(  # noqa: S603
-                [sys.executable, "-m", "venv", "--copies", str(_VENV_DIR)],
-                check=True,
-                capture_output=True,
+            _create_venv_directly(_VENV_DIR)
+        except subprocess.CalledProcessError:
+            # On SMB mounts the lib64 symlink creation fails.  Fall back to
+            # building in a temp dir (local fs) and copying with resolved
+            # symlinks.
+            logger.info(
+                "Direct venv creation failed (likely no symlink support); "
+                "creating via temp directory"
             )
-        except subprocess.CalledProcessError as exc:
-            stderr = exc.stderr.decode() if isinstance(exc.stderr, bytes) else (exc.stderr or "")
-            logger.error("Failed to create plugin venv: %s", stderr)
-            raise
+            shutil.rmtree(_VENV_DIR, ignore_errors=True)
+            try:
+                _create_venv_via_tempdir(_VENV_DIR)
+            except (subprocess.CalledProcessError, OSError) as exc:
+                msg = str(exc)
+                if isinstance(exc, subprocess.CalledProcessError):
+                    msg = (
+                        exc.stderr.decode() if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+                    )
+                logger.error("Failed to create plugin venv: %s", msg)
+                raise
     return _VENV_DIR
 
 
