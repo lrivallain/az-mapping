@@ -1877,6 +1877,7 @@ class TestDeploymentConfidence:
         assert "label" in conf
         assert "breakdown" in conf
         assert "missingSignals" in conf
+        assert conf["scoreType"] == "basic"
 
     def test_confidence_without_prices(self, client):
         """Without pricing, pricePressure should be in the missing list."""
@@ -1938,9 +1939,9 @@ class TestDeploymentConfidence:
             resp = client.get("/api/skus?region=eastus&subscriptionId=sub1")
 
         conf = resp.json()[0]["confidence"]
-        assert "quota" not in conf["missingSignals"]
+        assert "quotaPressure" not in conf["missingSignals"]
         signal_names = [b["name"] for b in conf["breakdown"]["components"]]
-        assert "quota" in signal_names
+        assert "quotaPressure" in signal_names
 
     def test_confidence_with_restrictions(self, client):
         """Restrictions lower the confidence score."""
