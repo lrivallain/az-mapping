@@ -88,7 +88,7 @@ app.add_middleware(
 
 
 @app.exception_handler(Exception)
-async def _generic_error_handler(request: Request, exc: Exception) -> JSONResponse:
+async def _generic_error_handler(_request: Request, exc: Exception) -> JSONResponse:
     """Return ``{"error": …}`` with status 500 for any unhandled exception."""
     logging.getLogger(__name__).exception("Unhandled error")
     return JSONResponse({"error": str(exc)}, status_code=500)

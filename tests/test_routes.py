@@ -33,7 +33,7 @@ class TestGlobalExceptionHandler:
         """FastAPI's own HTTPException (e.g. 404 for unknown routes) must not
         be swallowed by the generic handler."""
         resp = client.get("/api/nonexistent-route")
-        assert resp.status_code in (404, 405)
+        assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------
