@@ -24,3 +24,6 @@ src/*/_version.py
 
 # Data files
 data/
+
+# MkDocs build output
+site/
