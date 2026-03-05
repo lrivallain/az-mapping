@@ -7,11 +7,14 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.MICRO`).
 
 ## Unreleased
 
-*To complete*
+### Removed
+
+- **Deployment plan generation** – the `/api/deployment-plan` endpoint and related logic for generating deployment plans based on SKU availability and confidence scores has been removed.
+
 
 ## [2026.3.2] - 2026-03-05
 
-#### Added
+### Added
 
 - **Documentation** - Add `mkdocs` docs based websites, hosted in GitHub Pages, with a custom theme and structure. Initial content includes:
   - Home page with project overview and quick start guide.
