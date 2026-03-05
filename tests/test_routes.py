@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -1220,11 +1221,14 @@ class TestGetSkusPricing:
             resp = MagicMock()
             resp.raise_for_status.return_value = None
             resp.status_code = 200
-            if "/Microsoft.Compute/skus" in url:
+            parsed = urlsplit(url)
+            host = (parsed.hostname or "").lower()
+            path = parsed.path.lower()
+            if host == "management.azure.com" and "/providers/microsoft.compute/skus" in path:
                 resp.json.return_value = sku_resp
-            elif "/usages" in url:
+            elif host == "management.azure.com" and path.endswith("/usages"):
                 resp.json.return_value = {"value": []}
-            elif "prices.azure.com" in url:
+            elif host == "prices.azure.com":
                 resp.json.return_value = retail_resp
             else:
                 resp.json.return_value = {"value": []}
@@ -1307,11 +1311,14 @@ class TestGetSkusPricing:
             resp.raise_for_status.return_value = None
             resp.status_code = 200
             params = kwargs.get("params")
-            if "/Microsoft.Compute/skus" in url:
+            parsed = urlsplit(url)
+            host = (parsed.hostname or "").lower()
+            path = parsed.path.lower()
+            if host == "management.azure.com" and "/providers/microsoft.compute/skus" in path:
                 resp.json.return_value = sku_resp
-            elif "/usages" in url:
+            elif host == "management.azure.com" and path.endswith("/usages"):
                 resp.json.return_value = {"value": []}
-            elif "prices.azure.com" in url:
+            elif host == "prices.azure.com":
                 assert params is not None
                 assert params["currencyCode"] == "EUR"
                 resp.json.return_value = retail_resp
@@ -1325,7 +1332,9 @@ class TestGetSkusPricing:
             )
 
         assert resp.status_code == 200
-        prices_calls = [u for u in call_urls if "prices.azure.com" in u]
+        prices_calls = [
+            u for u in call_urls if (urlsplit(u).hostname or "").lower() == "prices.azure.com"
+        ]
         assert len(prices_calls) >= 1
 
     def test_pricing_cache_reused(self, client):
@@ -1339,11 +1348,14 @@ class TestGetSkusPricing:
             resp = MagicMock()
             resp.raise_for_status.return_value = None
             resp.status_code = 200
-            if "/Microsoft.Compute/skus" in url:
+            parsed = urlsplit(url)
+            host = (parsed.hostname or "").lower()
+            path = parsed.path.lower()
+            if host == "management.azure.com" and "/providers/microsoft.compute/skus" in path:
                 resp.json.return_value = sku_resp
-            elif "/usages" in url:
+            elif host == "management.azure.com" and path.endswith("/usages"):
                 resp.json.return_value = {"value": []}
-            elif "prices.azure.com" in url:
+            elif host == "prices.azure.com":
                 call_count["prices"] += 1
                 resp.json.return_value = retail_resp
             else:
@@ -1698,12 +1710,15 @@ class TestSkuProfile:
             resp = MagicMock()
             resp.raise_for_status.return_value = None
             resp.status_code = 200
-            if "/Microsoft.Compute/skus" in url:
+            parsed = urlsplit(url)
+            host = (parsed.hostname or "").lower()
+            path = parsed.path.lower()
+            if host == "management.azure.com" and "/providers/microsoft.compute/skus" in path:
                 resp.json.return_value = {
                     "value": arm_sku_value,
                     "nextLink": None,
                 }
-            elif "prices.azure.com" in url:
+            elif host == "prices.azure.com":
                 resp.json.return_value = {
                     "Items": retail_items,
                     "NextPageLink": None,
@@ -1876,11 +1891,14 @@ class TestDeploymentConfidence:
             resp = MagicMock()
             resp.raise_for_status.return_value = None
             resp.status_code = 200
-            if "/Microsoft.Compute/skus" in url:
+            parsed = urlsplit(url)
+            host = (parsed.hostname or "").lower()
+            path = parsed.path.lower()
+            if host == "management.azure.com" and "/providers/microsoft.compute/skus" in path:
                 resp.json.return_value = sku_resp
-            elif "/usages" in url:
+            elif host == "management.azure.com" and path.endswith("/usages"):
                 resp.json.return_value = usage_resp or {"value": []}
-            elif "prices.azure.com" in url:
+            elif host == "prices.azure.com":
                 resp.json.return_value = retail_resp or {"Items": [], "NextPageLink": None}
             else:
                 resp.json.return_value = {"value": []}
