@@ -6,6 +6,7 @@ import sys
 import textwrap
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlsplit
 
 import pytest
 import requests
@@ -135,7 +136,7 @@ class TestValidatePluginRepo:
         mock_raw_resp.text = VALID_PYPROJECT
 
         def side_effect(url: str, **_: object) -> MagicMock:
-            if "raw.githubusercontent.com" in url:
+            if (urlsplit(url).hostname or "").lower() == "raw.githubusercontent.com":
                 return mock_raw_resp
             return mock_ref_resp
 
@@ -161,7 +162,7 @@ class TestValidatePluginRepo:
         mock_raw_resp.text = PYPROJECT_MISSING_EP
 
         def side_effect(url: str, **_: object) -> MagicMock:
-            if "raw.githubusercontent.com" in url:
+            if (urlsplit(url).hostname or "").lower() == "raw.githubusercontent.com":
                 return mock_raw_resp
             return mock_ref_resp
 
@@ -184,7 +185,7 @@ class TestValidatePluginRepo:
         mock_raw_resp.text = PYPROJECT_BAD_EP_FORMAT
 
         def side_effect(url: str, **_: object) -> MagicMock:
-            if "raw.githubusercontent.com" in url:
+            if (urlsplit(url).hostname or "").lower() == "raw.githubusercontent.com":
                 return mock_raw_resp
             return mock_ref_resp
 
