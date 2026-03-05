@@ -38,7 +38,7 @@ router = APIRouter()
 
 @router.get(
     "/skus",
-    tags=["SKUs"],
+    tags=["Plugin: planner"],
     summary="Get SKU availability per zone",
     response_model=list[SkuInfo],
     responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
@@ -131,7 +131,7 @@ class DeploymentConfidenceRequest(BaseModel):
 
 @router.post(
     "/deployment-confidence",
-    tags=["SKUs"],
+    tags=["Plugin: planner"],
     summary="Compute Deployment Confidence Scores (bulk)",
     response_model=DeploymentConfidenceResponse,
     responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
@@ -248,7 +248,7 @@ class SpotScoresRequest(BaseModel):
 
 @router.post(
     "/spot-scores",
-    tags=["SKUs"],
+    tags=["Plugin: planner"],
     summary="Get Spot Placement Scores",
     response_model=SpotScoresResponse,
     responses={400: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
@@ -276,7 +276,7 @@ async def get_spot_scores(body: SpotScoresRequest) -> JSONResponse:
 # ---------------------------------------------------------------------------
 
 
-@router.get("/sku-pricing", tags=["SKUs"], summary="Get detailed pricing for a SKU")
+@router.get("/sku-pricing", tags=["Plugin: planner"], summary="Get detailed pricing for a SKU")
 async def get_sku_pricing(
     region: str = Query(..., description="Azure region name."),
     skuName: str = Query(..., description="ARM SKU name (e.g. Standard_D2s_v3)."),  # noqa: N803
@@ -308,7 +308,7 @@ async def get_sku_pricing(
 
 @router.post(
     "/deployment-plan",
-    tags=["Deployment"],
+    tags=["Plugin: planner"],
     summary="Generate a deployment plan",
     response_model=DeploymentPlanResponse,
     responses={500: {"model": ErrorResponse}},

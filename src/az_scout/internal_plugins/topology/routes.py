@@ -10,7 +10,7 @@ from starlette.responses import JSONResponse
 from az_scout import azure_api
 from az_scout.models.responses import ErrorResponse, SubscriptionMappingResult
 
-router = APIRouter(tags=["Mappings"])
+router = APIRouter(tags=["Plugin: topology"])
 
 
 @router.get(

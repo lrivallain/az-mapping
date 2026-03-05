@@ -149,8 +149,10 @@ def _register_one(app: FastAPI, mcp_server: Any, plugin: AzScoutPlugin) -> None:
         router = plugin.get_router()
         if router is not None:
             prefix = "/api" if internal else f"/plugins/{name}"
-            tag = name if internal else f"Plugin: {name}"
-            app.include_router(router, prefix=prefix, tags=[tag])
+            if internal:
+                app.include_router(router, prefix=prefix)
+            else:
+                app.include_router(router, prefix=prefix, tags=[f"Plugin: {name}"])
             if internal:
                 # Track individual route paths so _unregister_all doesn't nuke
                 # all /api/* routes (which includes core routes).
