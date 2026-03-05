@@ -6,6 +6,7 @@ description: "Scout Azure regions for VM availability, zone mappings, pricing, s
 ---
 
 <div align="center" markdown>
+![az-scout logo](assets/favicon.svg){ .logo width="128" }
 # Azure Scout
 
 [![CI](https://github.com/lrivallain/az-scout/actions/workflows/ci.yml/badge.svg)](https://github.com/lrivallain/az-scout/actions/workflows/ci.yml)
