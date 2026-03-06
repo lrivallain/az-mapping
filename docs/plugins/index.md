@@ -24,12 +24,11 @@ The plugin manager UI shows all discovered plugins, both built-in and external. 
 ## Quick start
 
 ```bash
-# Copy the scaffold
-cp -r docs/plugin-scaffold az-scout-myplugin
-cd az-scout-myplugin
+# From the az-scout repository root
+python3 tools/plugin-scaffold/create_plugin.py
 
-# Edit pyproject.toml (name, entry point)
-# Implement your plugin in src/az_scout_myplugin/__init__.py
+# Move into the generated plugin directory
+cd /path/to/generated/az-scout-myplugin
 
 # Install in dev mode alongside az-scout
 uv pip install -e .

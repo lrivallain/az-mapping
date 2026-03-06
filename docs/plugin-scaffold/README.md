@@ -1,6 +1,17 @@
 # az-scout-example
 
-A minimal az-scout plugin scaffold. Copy this directory and customise.
+A minimal az-scout plugin scaffold.
+
+Use the generator script from the main repo to create a fresh plugin from this scaffold:
+
+```bash
+# From the az-scout repository root
+python3 tools/plugin-scaffold/create_plugin.py
+```
+
+The script asks for plugin name, slug, output location, and repository details,
+then creates a complete plugin project with package/module names and static file
+paths already renamed.
 
 ## Features
 
@@ -11,6 +22,21 @@ A minimal az-scout plugin scaffold. Copy this directory and customise.
 - **URL hash routing** — `#example` selects the plugin tab
 
 ## Setup
+
+### Recommended (generator script)
+
+```bash
+# From the az-scout repository root
+python3 tools/plugin-scaffold/create_plugin.py
+
+# Then move into the generated plugin directory
+cd /path/to/generated/az-scout-myplugin
+uv sync --group dev
+uv pip install -e .
+az-scout
+```
+
+### Manual (copy + rename)
 
 ```bash
 # Clone in /tmp to export scaffold without git history
