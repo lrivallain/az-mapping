@@ -120,12 +120,14 @@ graph LR
     subgraph External["External Plugins (pip packages)"]
         E1["az-scout-plugin-batch-sku"]
         E2["az-scout-plugin-latency-stats"]
+        E3["az-scout-plugin-avs-sku"]
     end
 
     DISC2 --> T
     DISC2 --> P
     EP --> E1
     EP --> E2
+    EP --> E3
 
     T --> REG
     P --> REG

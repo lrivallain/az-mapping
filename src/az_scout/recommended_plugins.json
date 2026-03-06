@@ -14,5 +14,10 @@
     "name": "az-scout-plugin-latency-stats",
     "description": "Provides insights and recommendations for Azure subscriptions.",
     "source": "pypi"
+  },
+  {
+    "name": "az-scout-plugin-avs-sku",
+    "description": "Azure VMware Solution (AVS) SKU exploration.",
+    "source": "pypi"
   }
 ]
