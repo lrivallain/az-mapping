@@ -2,11 +2,11 @@
 
 A minimal az-scout plugin scaffold.
 
-Use the generator script from the main repo to create a fresh plugin from this scaffold:
+Use the generator command to create a fresh plugin from this scaffold:
 
 ```bash
-# From the az-scout repository root
-python3 tools/plugin-scaffold/create_plugin.py
+# From any environment with az-scout installed
+az-scout create-plugin
 ```
 
 The script asks for plugin name, slug, output location, and repository details,
@@ -23,17 +23,24 @@ paths already renamed.
 
 ## Setup
 
-### Recommended (generator script)
+### Recommended (generator command)
 
 ```bash
-# From the az-scout repository root
-python3 tools/plugin-scaffold/create_plugin.py
+# From any environment with az-scout installed
+az-scout create-plugin
 
 # Then move into the generated plugin directory
 cd /path/to/generated/az-scout-myplugin
 uv sync --group dev
 uv pip install -e .
 az-scout
+```
+
+Optional repo-dev fallback:
+
+```bash
+# From the az-scout repository root
+python3 tools/plugin-scaffold/create_plugin.py
 ```
 
 ### Manual (copy + rename)
@@ -53,7 +60,7 @@ az-scout  # plugin is auto-discovered
 
 ## Structure
 
-```
+```text
 az-scout-example/
 ├── .github/
 │   ├── copilot-instructions.md  # Copilot context for this plugin
@@ -78,7 +85,7 @@ az-scout-example/
 ## How it works
 
 1. The plugin JS loads the HTML fragment into `#plugin-tab-example`.
-2. It watches `#tenant-select` and `#region-select` for changes.
+2. It listens to `azscout:*` context events from the core app.
 3. When both are set, it fetches subscriptions from `/api/subscriptions`.
 4. The user picks a subscription and clicks the button.
 5. The plugin calls `GET /plugins/example/hello?subscription_name=…&tenant=…&region=…`.

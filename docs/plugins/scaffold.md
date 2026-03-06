@@ -81,6 +81,9 @@ class ExamplePlugin:
     def get_chat_modes(self) -> list[ChatMode] | None:
         return None
 
+    def get_system_prompt_addendum(self) -> str | None:
+        return None
+
 
 plugin = ExamplePlugin()
 ```
@@ -139,8 +142,8 @@ strict = true
 ## Get the scaffold
 
 ```bash
-# From the az-scout repository root
-python3 tools/plugin-scaffold/create_plugin.py
+# From any environment with az-scout installed
+az-scout create-plugin
 
 # Move into your generated plugin folder
 cd /path/to/generated/az-scout-myplugin
@@ -150,7 +153,13 @@ uv pip install -e .
 az-scout
 ```
 
-The script prompts for the plugin display name, slug, package/module names,
+Optional repo-dev fallback:
+
+```bash
+python3 tools/plugin-scaffold/create_plugin.py
+```
+
+The command prompts for the plugin display name, slug, package/module names,
 destination directory, and GitHub repository metadata, then generates a
 ready-to-edit plugin project.
 
