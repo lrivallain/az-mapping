@@ -7,6 +7,8 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.MICRO`).
 
 ## Unreleased
 
+## [2026.3.6] - 2026-03-12
+
 ### Added
 
 - **Interactive CLI chat** (`az-scout chat`) – terminal-based AI chat with Rich-rendered markdown responses, tool call panels with spinners, `[[choice]]` patterns as numbered options, and conversation history with Up/Down navigation. Supports one-shot queries (`az-scout chat "question"`) and interactive sessions (#103).
@@ -19,6 +21,7 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.MICRO`).
 - **Domain migration** – updated documentation site URL from `azscout.vupti.me` to `docs.az-scout.com`.
 - **ARM token caching** – tokens are now cached per-tenant with thread-safe locking, eliminating redundant `credential.get_token()` calls and debug log spam during concurrent requests.
 - **ARM request timing** – all ARM HTTP calls now log elapsed time at DEBUG level (`ARM GET … → 200 (0.34s)`) for performance troubleshooting.
+- **Plugin naming convention** – updated docs and scaffold generator to recommend `az-scout-plugin-{name}` package naming (matching all existing plugins).
 
 ## [2026.3.5] - 2026-03-10
 
