@@ -28,9 +28,7 @@ logger = logging.getLogger(__name__)
 async def list_tenants(request: Request) -> JSONResponse:
     """Return Azure AD tenants accessible by the current user or credential."""
     token = get_user_token(request)
-    return JSONResponse(
-        await asyncio.to_thread(azure_api.list_tenants, user_token=token)
-    )
+    return JSONResponse(await asyncio.to_thread(azure_api.list_tenants, user_token=token))
 
 
 @router.get(
@@ -48,9 +46,7 @@ async def list_subscriptions(
     """Return all enabled Azure subscriptions, sorted alphabetically."""
     token = get_user_token(request)
     return JSONResponse(
-        await asyncio.to_thread(
-            azure_api.list_subscriptions, tenantId, user_token=token
-        )
+        await asyncio.to_thread(azure_api.list_subscriptions, tenantId, user_token=token)
     )
 
 
