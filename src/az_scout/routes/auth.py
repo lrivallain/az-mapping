@@ -167,13 +167,18 @@ async def login_page(
 
     from fastapi.templating import Jinja2Templates
 
-    from az_scout.azure_api._obo import TENANT_ID
+    from az_scout.azure_api._obo import CLIENT_ID, TENANT_ID
 
     templates = Jinja2Templates(directory=str(Path(__file__).resolve().parent.parent / "templates"))
     return templates.TemplateResponse(
         request,
         "login.html",
-        {"error": error, "tenant": tenant or "", "home_tenant": TENANT_ID},
+        {
+            "error": error,
+            "tenant": tenant or "",
+            "home_tenant": TENANT_ID,
+            "client_id": CLIENT_ID,
+        },
     )
 
 
@@ -295,6 +300,25 @@ async def auth_callback(
         is_admin,
         TENANT_ID,
     )
+
+    # Validate OBO works for this tenant before creating the session.
+    # If OBO fails, redirect to login with a specific error — the main page never loads.
+    try:
+        from az_scout.azure_api._obo import OboTokenError, obo_exchange
+
+        obo_exchange(result["access_token"], tenant_id=home_tenant)
+    except OboTokenError as exc:
+        error_msg = str(exc)
+        logger.warning("OBO validation failed at login: %s", error_msg[:200])
+        if "consent" in error_msg.lower() or "AADSTS65001" in error_msg:
+            return RedirectResponse(f"/auth/login?error=consent_required&tenant={home_tenant}")
+        if "AADSTS50076" in error_msg or "AADSTS50079" in error_msg:
+            return RedirectResponse(f"/auth/login?error=mfa_required&tenant={home_tenant}")
+        if "AADSTS90072" in error_msg:
+            return RedirectResponse(f"/auth/login?error=user_not_in_tenant&tenant={home_tenant}")
+        if "AADSTS500133" in error_msg:
+            return RedirectResponse("/auth/login?error=token_expired")
+        return RedirectResponse("/auth/login?error=obo_failed")
 
     # Fetch user's tenant list at login time using OBO against the app's
     # home tenant (where consent is granted).  The /tenants ARM endpoint is
