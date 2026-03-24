@@ -195,7 +195,7 @@ app.add_middleware(_CSPMiddleware)
 
 # ---------------------------------------------------------------------------
 # Auth context middleware – populates contextvars for the current request
-# so _get_headers() can read user_token/direct_arm without explicit params.
+# so _get_headers() can read user_token without explicit params.
 #
 # Uses a raw ASGI middleware instead of BaseHTTPMiddleware because Starlette's
 # BaseHTTPMiddleware runs call_next in a separate anyio task, which breaks
@@ -222,7 +222,6 @@ class _AuthContextMiddleware:
             return
 
         token_value: str | None = None
-        direct = False
 
         # 1. Check Authorization header (MCP / direct API clients)
         for name, value in scope.get("headers", []):
@@ -230,8 +229,6 @@ class _AuthContextMiddleware:
                 val = value.decode("latin-1")
                 if val.startswith("Bearer "):
                     token_value = val[7:]
-            elif name == b"x-direct-arm":
-                direct = value == b"true"
 
         # 2. Fall back to session cookie (web browser)
         if not token_value:
@@ -256,11 +253,11 @@ class _AuthContextMiddleware:
                                     token_value = session["access_token"]
                         break
 
-        tokens = set_request_auth(token_value, direct)
+        tok = set_request_auth(token_value)
         try:
             await self.app(scope, receive, send)
         finally:
-            clear_request_auth(tokens)
+            clear_request_auth(tok)
 
 
 app.add_middleware(_AuthContextMiddleware)

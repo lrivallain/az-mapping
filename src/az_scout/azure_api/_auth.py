@@ -48,7 +48,6 @@ def _get_headers(
     tenant_id: str | None = None,
     *,
     user_token: str | None = None,
-    direct_arm: bool = False,
 ) -> dict[str, str]:
     """Return authorization headers for ARM API calls.
 
@@ -59,8 +58,8 @@ def _get_headers(
     When *user_token* is ``None`` (or OBO is not configured), falls back
     to ``DefaultAzureCredential`` (local dev / managed identity).
 
-    If explicit *user_token* / *direct_arm* are not supplied, the function
-    checks the per-request context vars set by ``AuthContextMiddleware``.
+    If explicit *user_token* is not supplied, the function
+    checks the per-request context set by ``AuthContextMiddleware``.
 
     Tokens are cached in-memory and reused until 2 minutes before expiry.
     """
@@ -68,9 +67,7 @@ def _get_headers(
     if user_token is None:
         from az_scout.auth import _NO_TOKEN, get_request_auth
 
-        user_token, ctx_direct = get_request_auth()
-        if not direct_arm:
-            direct_arm = ctx_direct
+        user_token = get_request_auth()
 
         # Sentinel means "middleware ran but no user token" → block in OBO mode
         if user_token == _NO_TOKEN:
@@ -81,13 +78,6 @@ def _get_headers(
         from az_scout.azure_api._obo import is_obo_enabled, obo_exchange
 
         if is_obo_enabled():
-            # If the token was acquired directly for ARM (MFA fallback),
-            # use it as-is — no OBO exchange needed.
-            if direct_arm:
-                return {
-                    "Authorization": f"Bearer {user_token}",
-                    "Content-Type": "application/json",
-                }
             return obo_exchange(user_token, tenant_id=tenant_id)
 
     # When OBO is configured, require a user token for web requests.
@@ -100,7 +90,7 @@ def _get_headers(
     if is_obo_enabled() and not user_token:
         from az_scout.auth import _NO_TOKEN, get_request_auth
 
-        raw_token, _ = get_request_auth()
+        raw_token = get_request_auth()
         # If raw value is _NO_TOKEN, it means middleware ran → web request → block
         # If raw value is None, middleware never ran → CLI mode → allow fallthrough
         if raw_token == _NO_TOKEN:
