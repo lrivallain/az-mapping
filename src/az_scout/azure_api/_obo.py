@@ -59,7 +59,11 @@ def _get_msal_app(tenant_id: str | None = None) -> Any:
     """Get or create a per-tenant MSAL ConfidentialClientApplication."""
     import msal as msal_lib
 
-    target = tenant_id or TENANT_ID or "common"
+    # Use the specified tenant, or "organizations" to let Azure resolve
+    # the correct tenant from the user's token. Do NOT default to TENANT_ID
+    # — that would force OBO against the app's home tenant, which fails
+    # for users from other tenants.
+    target = tenant_id or "organizations"
     with _msal_lock:
         if target not in _msal_apps:
             _msal_apps[target] = msal_lib.ConfidentialClientApplication(
@@ -112,7 +116,7 @@ def obo_exchange(
                     "Content-Type": "application/json",
                 }
 
-    target = tenant_id or TENANT_ID or "common"
+    target = tenant_id or "organizations"
     logger.debug("OBO exchange via MSAL (tenant=%s)", target)
 
     app = _get_msal_app(tenant_id)
