@@ -178,6 +178,27 @@ async function apiPost(url, body) {
     return resp.json();
 }
 
+/**
+ * Non-streaming AI completion helper for plugin frontends.
+ * Calls POST /api/ai/complete and returns {content, tool_calls}.
+ * @param {string} prompt - The user message to send.
+ * @param {object} [options] - Optional: systemPrompt, tenantId, region, subscriptionId, tools.
+ * @returns {Promise<{content: string, tool_calls: Array}>}
+ */
+async function aiComplete(prompt, options = {}) {
+    const tid = options.tenantId || document.getElementById("tenant-select")?.value || "";
+    const reg = options.region || document.getElementById("region-select")?.value || "";
+    const sub = options.subscriptionId || "";
+    return apiPost("/api/ai/complete", {
+        prompt,
+        system_prompt: options.systemPrompt || null,
+        tenant_id: tid || null,
+        region: reg || null,
+        subscription_id: sub || null,
+        tools: options.tools !== false,
+    });
+}
+
 function showError(targetId, msg, { html = false } = {}) {
     const el = document.getElementById(targetId);
     if (!el) return;

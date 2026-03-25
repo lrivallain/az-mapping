@@ -34,6 +34,7 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.MICRO`).
 - **MCP auth via Bearer token** – VS Code MCP clients authenticate via `Authorization` header.
 - **Retail Prices retry** – Connection errors on the Azure Retail Prices API are now retried with exponential backoff.
 - **Biome JS lint** – Added to pre-commit hooks and ship-code-change prompt.
+- **Non-streaming AI completion endpoint** – `POST /api/ai/complete` runs the full tool-calling loop server-side and returns a single JSON response. Plugins can use `plugin_ai_complete()` (Python) or `aiComplete()` (JS) for inline AI recommendations outside the chat panel.
 
 ### Changed
 
