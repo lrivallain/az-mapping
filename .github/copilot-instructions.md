@@ -79,11 +79,14 @@ tests/
 
 When `AZ_SCOUT_CLIENT_ID` and `AZ_SCOUT_CLIENT_SECRET` are set, OBO mode is activated:
 
-- **Web requests** require a Bearer token (from MSAL.js) in the `Authorization` header. Without it, `_get_headers()` raises `OboTokenError("Authentication required")`.
-- **CLI mode** (`az-scout chat`, `az-scout mcp --stdio`) has no HTTP middleware, so `_get_headers()` falls back to `DefaultAzureCredential`.
-- **Auth context propagation**: The `_AuthContextMiddleware` (raw ASGI) extracts the user token and sets both a module-level global and context vars. The global handles raw `ThreadPoolExecutor` workers (e.g. ODCR plugin), context vars handle `asyncio.to_thread`.
-- **MFA handling**: MFA is handled during the server-side OAuth login redirect — Microsoft completes MFA before returning the authorization code.
-- **OBO token cache**: Keyed by full token hash + tenant (not just first 20 chars) to prevent cross-user cache pollution.
+- **Server-side auth flow**: Users sign in via `/auth/login` → Microsoft login → `/auth/callback`. Sessions stored as HMAC-signed HTTP-only cookies. No client-side token management.
+- **Single-tenant-per-session**: Each session is scoped to the login tenant (extracted from the JWT `tid` claim). No cross-tenant OBO. To switch tenants, sign out and sign in again.
+- **OBO validation at login**: The OBO exchange is tested in the callback before creating the session. Consent/MFA/user errors redirect to the login page with specific error messages.
+- **Web requests**: Unauthenticated requests get `_NO_TOKEN` sentinel via the middleware → `OboTokenError("Authentication required")` → redirect to `/auth/login`.
+- **CLI mode** (`az-scout chat`, `az-scout mcp --stdio`) has no middleware, so `_get_headers()` falls back to `DefaultAzureCredential`.
+- **Auth context propagation**: The `_AuthContextMiddleware` (raw ASGI) reads tokens from Authorization header (MCP) or session cookie (web), sets module-level global + context vars.
+- **Admin role**: Entra ID App Role `Admin` from home tenant controls plugin management. `_require_admin()` guard on write endpoints.
+- **OBO token cache**: Keyed by full token hash + tenant to prevent cross-user cache pollution.
 - **`OboTokenError`**: Exception with `error_code` and optional `claims` fields. Handled by a dedicated exception handler in `app.py` returning 401 responses.
 
 ## MCP tools reference

@@ -10,19 +10,20 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.MICRO`).
 ### Added
 
 - **On-Behalf-Of (OBO) authentication** – Multi-user mode where each user signs in with their Microsoft account and az-scout accesses Azure ARM APIs with their RBAC permissions instead of the app's managed identity. Enabled via `AZ_SCOUT_CLIENT_ID`, `AZ_SCOUT_CLIENT_SECRET`, and `AZ_SCOUT_TENANT_ID` environment variables.
-- **Server-side auth flow** – OAuth 2.0 authorization code flow via `/auth/login`, `/auth/callback`, `/auth/logout` with signed HTTP-only session cookies. Replaces the previous MSAL.js client-side flow for better mobile compatibility and security.
-- **Login page** – Dedicated sign-in page (`login.html`) with "Sign in with Microsoft" and "Sign in as Admin (home tenant)" buttons, error messages for failed auth, and theme-aware styling.
-- **Role-based access control** – Entra ID App Roles (`Admin`) enforced server-side. Plugin management (install/uninstall/update) restricted to home-tenant admins. Non-admins see a read-only UI with the plugin manager hidden via `admin-only` CSS class.
-- **CSRF protection** – OAuth state parameter uses cryptographic nonces (10-min expiry, single-use) to prevent cross-site request forgery on the auth callback.
-- **Auth context middleware** – Raw ASGI middleware propagates user tokens to all routes (including plugins and MCP tools) via module globals and context vars, supporting `asyncio.to_thread` and raw `ThreadPoolExecutor` workers.
-- **Sentinel-based OBO guard** – `_NO_TOKEN` sentinel distinguishes "unauthenticated web request" from "CLI mode" without using a racy global flag. Prevents any web request from falling through to `DefaultAzureCredential` when OBO is enabled.
-- **MCP auth via Bearer token** – VS Code MCP clients can authenticate by passing a Bearer token in the `Authorization` header, acquired via `az account get-access-token`.
-- **OBO tests** – 15 tests covering OBO exchange, MFA claims handling, direct ARM passthrough, CLI fallback, and auth config endpoint.
-- **Retail Prices retry** – Connection errors (`ConnectionResetError`) on the Azure Retail Prices API are now retried with exponential backoff.
+- **Server-side auth flow** – OAuth 2.0 authorization code flow with signed HTTP-only session cookies. Login page with two options: sign in with your account (organizations authority) or target a specific tenant (domain/ID input).
+- **Single-tenant-per-session model** – Each session is scoped to the tenant the user authenticated against. OBO always uses the login tenant, eliminating cross-tenant failures. To switch tenants, sign out and sign in with a different tenant.
+- **OBO validation at login** – OBO exchange is validated during login before creating the session. Consent, MFA, and other errors are shown on the login page with actionable messages (Grant Admin Consent button, Copy link, etc.) — the main app never loads with invalid auth.
+- **Login page** – Dedicated sign-in page with side-by-side cards for account login and tenant-specific login, error alerts for all auth failure types, admin login button in navbar.
+- **Role-based access control** – Entra ID App Roles (`Admin`) enforced server-side. Plugin management restricted to home-tenant admins. Non-admins see a read-only UI via `admin-only` CSS class.
+- **Auth context middleware** – Raw ASGI middleware propagates user tokens to all routes (including plugins and MCP tools) via module globals and context vars.
+- **Sentinel-based OBO guard** – `_NO_TOKEN` sentinel prevents web requests from falling through to `DefaultAzureCredential` when OBO is enabled.
+- **MCP auth via Bearer token** – VS Code MCP clients authenticate via `Authorization` header.
+- **Retail Prices retry** – Connection errors on the Azure Retail Prices API are now retried with exponential backoff.
+- **Biome JS lint** – Added to pre-commit hooks and ship-code-change prompt.
 
 ### Changed
 
-- **Plugin error handling** – `PluginError` exceptions caused by `OboTokenError` now return 401 (not 502) and suppress stacktraces for expected auth errors.
+- **Plugin error handling** – `PluginError` exceptions caused by `OboTokenError` return 401 (not 502) and suppress stacktraces.
 
 ### Changed
 
