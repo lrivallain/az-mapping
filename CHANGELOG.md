@@ -7,6 +7,11 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.MICRO`).
 
 ## Unreleased
 
+### Added
+
+- **File instructions** – Split `copilot-instructions.md` (390→93 lines) into 5 domain-specific file instructions that load automatically when editing relevant files: `azure-api`, `obo-auth`, `frontend`, `plugin-dev`, `plugin-scaffold`.
+- **`create-plugin` skill** – Interactive skill (`/create-plugin`) that guides plugin scaffold generation, conventions, and quality checks.
+
 ## [2026.3.7] - 2026-03-26
 
 ### Fixed
