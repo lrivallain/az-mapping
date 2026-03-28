@@ -11,6 +11,8 @@ Scout Azure regions for VM availability, zone mappings, pricing, spot scores, an
 
 📖 **Full documentation:** [docs.az-scout.com](https://docs.az-scout.com)
 
+📦 **Plugin catalog:** [docs.az-scout.com/catalog](https://docs.az-scout.com/catalog)
+
 **az-scout** helps Azure operators and architects answer the questions that matter when planning resilient, cost-efficient VM deployments:
 
 - *Do my subscriptions share the same physical datacenter for logical zone 1?*
@@ -50,7 +52,7 @@ Your browser opens automatically at `http://127.0.0.1:5001`.
 
 az-scout can be extended with pip-installable plugins discovered automatically at startup. See [docs/PLUGINS.md](docs/PLUGINS.md) for the plugin development guide and the [scaffold](docs/plugin-scaffold/) for a ready-to-use template.
 
-A **Plugin Manager** is included in the UI to browse the [online plugin catalog](https://plugin-catalog.az-scout.com/catalog.json), install, update, and remove plugins.
+A **Plugin Manager** is included in the UI to browse the [plugin catalog](https://docs.az-scout.com/catalog), install, update, and remove plugins.
 
 ## Installation options
 

@@ -2,6 +2,8 @@
 
 az-scout supports plugins — pip-installable Python packages that extend the application with custom API routes, MCP tools, UI tabs, static assets, and AI chat modes.
 
+Explore the [plugin catalog](/catalog) to find existing plugins, or follow the instructions below to add your own!
+
 ---
 
 ## How it works
@@ -15,7 +17,7 @@ az-scout supports plugins — pip-installable Python packages that extend the ap
 
 ### Plugin manager
 
-The plugin manager UI shows all discovered plugins, both built-in and external. It fetches the [online plugin catalog](https://plugin-catalog.az-scout.com/catalog.json) to show recommended plugins that can be installed with one click.
+The plugin manager UI shows all discovered plugins, both built-in and external. It fetches the [online json plugin catalog](https://plugin-catalog.az-scout.com/catalog.json) to show recommended plugins that can be installed with one click.
 
 ![Plugin manager UI showing a list of installed plugins with install/uninstall buttons](../assets/screenshots/plugin-manager.png){ .screenshot }
 
