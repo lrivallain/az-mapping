@@ -566,10 +566,10 @@ async function fetchPricingDetail() {
     document.getElementById("pricing-modal-content").classList.add("d-none");
 
     try {
-        const params = new URLSearchParams({ region, skuName, currencyCode: currency });
+        const params = new URLSearchParams({ region, sku: skuName, currencyCode: currency });
         if (plannerSubscriptionId) params.set("subscriptionId", plannerSubscriptionId);
         const tqs = tenantQS("&");
-        const data = await apiFetch(`/api/sku-pricing?${params}${tqs}`);
+        const data = await apiFetch(`/api/sku-detail?${params}${tqs}`);
         renderPricingDetail(data);
     } catch (err) {
         const content = document.getElementById("pricing-modal-content");
