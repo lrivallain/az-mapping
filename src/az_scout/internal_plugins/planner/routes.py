@@ -20,7 +20,6 @@ from az_scout.models.responses import (
 from az_scout.scoring.deployment_confidence import (
     best_spot_label,
     compute_deployment_confidence,
-    enrich_skus_with_confidence,
     signals_from_sku,
 )
 
@@ -97,13 +96,16 @@ async def get_skus(
         min_memory_gb=minMemoryGB,
         max_memory_gb=maxMemoryGB,
     )
-    await asyncio.to_thread(
-        azure_api.enrich_skus_with_quotas, skus, region, subscriptionId, tenantId
+    await azure_api.enrich_skus(
+        skus,
+        region,
+        subscriptionId,
+        quotas=True,
+        prices=includePrices,
+        confidence=True,
+        currency_code=currencyCode,
+        tenant_id=tenantId or "",
     )
-    if includePrices:
-        await asyncio.to_thread(azure_api.enrich_skus_with_prices, skus, region, currencyCode)
-
-    enrich_skus_with_confidence(skus)
 
     return JSONResponse(skus)
 
