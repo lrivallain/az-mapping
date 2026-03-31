@@ -10,7 +10,17 @@ applyTo: "src/az_scout/static/**,src/az_scout/templates/**"
 - Vanilla JS only — no npm, no bundler, no frameworks.
 - Use `const`/`let` (never `var`). Functions and variables use `camelCase`.
 - Biome lint is enforced via pre-commit hooks.
-- Scripts load order: auth.js → app.js → chat.js → plugins.js → plugin scripts → inline setup
+- Scripts load order: auth.js → app.js → components/*.js → chat.js → plugins.js → plugin scripts → inline setup
+
+## Shared JS components (`static/js/components/`)
+
+Reusable renderers available to all plugins via the `window.azScout.components` namespace:
+
+| Module | Functions |
+|---|---|
+| `sku-badges.js` | `scoreLabel()`, `renderConfidenceBadge()`, `renderSpotBadges()`, `renderSpotBadge()`, `renderZoneBadges()`, `renderQuotaBar()` |
+| `sku-detail-modal.js` | `renderVmProfile()`, `renderZoneAvailability()`, `renderQuotaPanel()`, `renderConfidenceBreakdown()`, `renderPricingPanel()` |
+| `data-filters.js` | `parseNumericFilter()`, `matchNumericFilter()`, `buildColumnFilters()`, `applyColumnFilters()` |
 
 ## CSS
 

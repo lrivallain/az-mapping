@@ -55,6 +55,10 @@ let _skuFilterState = {};                   // {headerText: filterValue} – per
 // ---------------------------------------------------------------------------
 const _REGION_SCORE_LABELS = [[80, "High"], [60, "Medium"], [40, "Low"], [0, "Very Low"]];
 
+// Delegate to shared components
+const _C = window.azScout?.components || {};
+function _scoreLabel(score) { return _C.scoreLabel ? _C.scoreLabel(score) : "Unknown"; }
+
 /**
  * Fetch canonical Deployment Confidence scores from the backend for the
  * given SKU names.  Updates ``lastSkuData[].confidence`` in place and
@@ -669,72 +673,7 @@ function renderPricingDetail(data, openAccordionIds) {
 }
 
 function renderVmProfile(profile) {
-    const caps = profile.capabilities || {};
-
-    function badge(val, trueLabel, falseLabel) {
-        if (val === true) return `<span class="vm-badge vm-badge-yes">${escapeHtml(trueLabel || "Yes")}</span>`;
-        if (val === false) return `<span class="vm-badge vm-badge-no">${escapeHtml(falseLabel || "No")}</span>`;
-        return '<span class="vm-badge vm-badge-unknown">\u2014</span>';
-    }
-    function row(label, value) {
-        return `<div class="vm-profile-row"><span class="vm-profile-label">${escapeHtml(label)}</span><span>${value}</span></div>`;
-    }
-    function val(v, suffix) {
-        if (v == null) return '<span class="vm-badge vm-badge-unknown">\u2014</span>';
-        return escapeHtml(String(v) + (suffix || ""));
-    }
-    function bytesToMBs(v) {
-        if (v == null) return '<span class="vm-badge vm-badge-unknown">\u2014</span>';
-        return escapeHtml((Number(v) / (1024 * 1024)).toFixed(0) + " MB/s");
-    }
-    function bytesToGB(v) {
-        if (v == null) return '<span class="vm-badge vm-badge-unknown">\u2014</span>';
-        return escapeHtml((Number(v) / (1024 * 1024 * 1024)).toFixed(0) + " GB");
-    }
-    function mbpsToGbps(v) {
-        if (v == null) return '<span class="vm-badge vm-badge-unknown">\u2014</span>';
-        const gbps = Number(v) / 1000;
-        return escapeHtml(gbps >= 1 ? gbps.toFixed(1) + " Gbps" : v + " Mbps");
-    }
-
-    let html = '<div class="vm-profile-section">';
-    html += '<h4 class="vm-profile-title">VM Profile</h4>';
-    html += '<div class="vm-profile-grid">';
-
-    html += '<div class="vm-profile-card">';
-    html += '<div class="vm-profile-card-title">Compute</div>';
-    html += row("vCPUs", val(caps.vCPUs));
-    html += row("Memory", val(caps.MemoryGB, " GB"));
-    html += row("Architecture", val(caps.CpuArchitectureType));
-    html += row("GPUs", val(caps.GPUs ?? caps.GpuCount));
-    html += row("HyperV Gen.", val(caps.HyperVGenerations));
-    html += row("Encryption at Host", badge(caps.EncryptionAtHostSupported));
-    html += row("Confidential", val(caps.ConfidentialComputingType || null));
-    html += '</div>';
-
-    html += '<div class="vm-profile-card">';
-    html += '<div class="vm-profile-card-title">Storage</div>';
-    html += row("Premium IO", badge(caps.PremiumIO));
-    html += row("Ultra SSD", badge(caps.UltraSSDAvailable));
-    html += row("Ephemeral OS Disk", badge(caps.EphemeralOSDiskSupported));
-    html += row("Max Data Disks", val(caps.MaxDataDiskCount));
-    html += row("Uncached Disk IOPS", val(caps.UncachedDiskIOPS));
-    html += row("Uncached Disk BW", bytesToMBs(caps.UncachedDiskBytesPerSecond));
-    html += row("Cached Disk Size", bytesToGB(caps.CachedDiskBytes));
-    html += row("Write Accelerator", val(caps.MaxWriteAcceleratorDisksAllowed));
-    html += row("Temp Disk", val(caps.TempDiskSizeInGiB, " GiB"));
-    html += '</div>';
-
-    html += '<div class="vm-profile-card">';
-    html += '<div class="vm-profile-card-title">Network</div>';
-    html += row("Accelerated Net.", badge(caps.AcceleratedNetworkingEnabled));
-    html += row("Max NICs", val(caps.MaxNetworkInterfaces ?? caps.MaximumNetworkInterfaces));
-    html += row("Max Bandwidth", mbpsToGbps(caps.MaxBandwidthMbps));
-    html += row("RDMA", badge(caps.RdmaEnabled));
-    html += '</div>';
-
-    html += '</div></div>';
-    return html;
+    return _C.renderVmProfile ? _C.renderVmProfile(profile) : "";
 }
 
 function renderZoneAvailability(profile, confidence) {
@@ -881,78 +820,7 @@ function renderZoneAvailability(profile, confidence) {
 }
 
 function renderQuotaPanel(quota, vcpus, confidence) {
-    const limit = quota.limit;
-    const used = quota.used;
-    const remaining = quota.remaining;
-    const pct = (limit != null && limit > 0) ? Math.round((used / limit) * 100) : null;
-    const deployable = (remaining != null && vcpus > 0) ? Math.floor(remaining / vcpus) : null;
-
-    // Extract the quota signal from the confidence breakdown
-    const _qComponents = confidence?.breakdown?.components || [];
-    const quotaSignal = _qComponents.find(b => b.name === "quota");
-    const quotaScore = quotaSignal?.score100;
-
-    function row(label, value) {
-        return `<div class="vm-profile-row"><span class="vm-profile-label">${escapeHtml(label)}</span><span>${value}</span></div>`;
-    }
-    function val(v) {
-        if (v == null) return '<span class="vm-badge vm-badge-unknown">\u2014</span>';
-        return escapeHtml(formatNum(v, 0));
-    }
-
-    let barClass = "bg-success";
-    if (pct != null) {
-        if (pct >= 90) barClass = "bg-danger";
-        else if (pct >= 70) barClass = "bg-warning";
-    }
-
-    let bodyHtml = '<div class="vm-profile-grid">';
-
-    bodyHtml += '<div class="vm-profile-card">';
-    bodyHtml += '<div class="vm-profile-card-title">vCPU Family Quota</div>';
-    bodyHtml += row("Limit", val(limit));
-    bodyHtml += row("Used", val(used));
-    bodyHtml += row("Remaining", val(remaining));
-    if (pct != null) {
-        bodyHtml += `<div class="vm-profile-row"><span class="vm-profile-label">Usage</span><span>${pct}%</span></div>`;
-        bodyHtml += `<div class="progress mt-1" style="height: 6px;" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">`;
-        bodyHtml += `<div class="progress-bar ${barClass}" style="width: ${pct}%"></div></div>`;
-    }
-    bodyHtml += '</div>';
-
-    bodyHtml += '<div class="vm-profile-card">';
-    bodyHtml += '<div class="vm-profile-card-title">Deployment Headroom</div>';
-    bodyHtml += row("vCPUs per Instance", vcpus > 0 ? escapeHtml(String(vcpus)) : '\u2014');
-    if (deployable != null) {
-        const badge = deployable === 0
-            ? '<span class="vm-badge vm-badge-no">' + formatNum(deployable, 0) + '</span>'
-            : deployable <= 5
-                ? '<span class="vm-badge vm-badge-limited">' + formatNum(deployable, 0) + '</span>'
-                : '<span class="vm-badge vm-badge-yes">' + formatNum(deployable, 0) + '</span>';
-        bodyHtml += `<div class="vm-profile-row"><span class="vm-profile-label">Deployable Instances</span>${badge}</div>`;
-    } else {
-        bodyHtml += row("Deployable Instances", '\u2014');
-    }
-    if (quotaScore != null) {
-        const lbl = _scoreLabel(quotaScore).toLowerCase().replace(/\s+/g, "-");
-        bodyHtml += `<div class="vm-profile-row"><span class="vm-profile-label">Headroom Score</span><span class="confidence-badge confidence-${lbl}" data-bs-toggle="tooltip" data-bs-title="Quota signal score: remaining vCPUs relative to SKU size. Score of 100 means \u226510 instances can be deployed.">${quotaScore}/100</span></div>`;
-    }
-    bodyHtml += '</div>';
-
-    bodyHtml += '</div>';
-
-    // Wrap in accordion
-    let html = '<div class="accordion mt-3" id="quotaAccordion">';
-    html += '<div class="accordion-item">';
-    html += '<h2 class="accordion-header">';
-    html += '<button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#quotaCollapsePanel" aria-expanded="false" aria-controls="quotaCollapsePanel">';
-    html += '<i class="bi bi-speedometer me-2"></i>Quota';
-    html += '</button></h2>';
-    html += '<div id="quotaCollapsePanel" class="accordion-collapse collapse" data-bs-parent="#quotaAccordion">';
-    html += '<div class="accordion-body p-2">';
-    html += bodyHtml;
-    html += '</div></div></div></div>';
-    return html;
+    return _C.renderQuotaPanel ? _C.renderQuotaPanel(quota, vcpus, confidence) : "";
 }
 
 function renderConfidenceBreakdown(conf) {
@@ -1053,13 +921,6 @@ function _computeRegionScores(skus) {
     });
 
     return { readiness, consistency, total: skus.length, zones: allLogicalZones.length, zoneBreakdown };
-}
-
-function _scoreLabel(score) {
-    for (const [th, lbl] of _REGION_SCORE_LABELS) {
-        if (score >= th) return lbl;
-    }
-    return "Very Low";
 }
 
 function renderRegionSummary(skus) {
