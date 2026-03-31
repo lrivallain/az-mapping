@@ -9,6 +9,10 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.MICRO`).
 
 ### Added
 
+- **`SkuDict` TypedDict** – Formal data contract (`SkuDict`, `SkuCapabilities`, `SkuQuota`, `SkuPricing`, `SkuConfidence`) in `plugin_api.py` documenting the canonical SKU dict shape expected by enrichment functions.
+- **`enrich_skus()` pipeline** – New async helper in `azure_api` that runs the full enrichment chain (quotas → prices → spot → confidence) with opt-in steps and correct ordering. Plugins no longer need to reimplement the 4-step enrichment sequence.
+- **Confidence scoring re-exports** – `compute_deployment_confidence`, `signals_from_sku`, and `enrich_skus_with_confidence` are now re-exported from `azure_api` for plugin convenience.
+- **Core SKU detail route** – `GET /api/sku-detail` combines VM profile, pricing, and deployment confidence into a single response. Shared by all plugins for SKU detail modals.
 - **Tab reordering** – Main tabs can be reordered via drag-and-drop. The custom order is persisted in `localStorage` and restored on page load. A grip icon (⠿) appears on hover to indicate draggability. New plugin tabs are appended at the end; stale tabs from uninstalled plugins are silently dropped.
 
 ## [2026.3.8] - 2026-03-28

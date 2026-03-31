@@ -25,6 +25,7 @@ from az_scout.plugin_manager import reconcile_installed_plugins
 from az_scout.plugins import get_plugin_metadata, register_plugins
 from az_scout.routes import router as plugin_manager_router
 from az_scout.routes.discovery import router as discovery_router
+from az_scout.routes.sku_detail import router as sku_detail_router
 from az_scout.services.ai_chat import is_chat_enabled
 
 _PKG_DIR = Path(__file__).resolve().parent
@@ -275,6 +276,9 @@ app.include_router(plugin_manager_router)
 
 # Discovery API routes (tenants, subscriptions, regions, locations)
 app.include_router(discovery_router, prefix="/api")
+
+# SKU detail route (shared by all plugins)
+app.include_router(sku_detail_router, prefix="/api")
 
 # ---------------------------------------------------------------------------
 # MCP – mount the MCP server as an ASGI sub-app under /mcp

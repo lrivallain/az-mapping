@@ -14,7 +14,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, TypedDict, runtime_checkable
 
 from fastapi import APIRouter
 
@@ -193,3 +193,68 @@ class PluginUpstreamError(PluginError):
     """Raised when an upstream API call fails (HTTP 502)."""
 
     status_code: int = 502
+
+
+# ---------------------------------------------------------------------------
+# SKU data contract – shared dict shape for enrichment functions
+# ---------------------------------------------------------------------------
+
+
+class SkuCapabilities(TypedDict, total=False):
+    """Subset of ARM SKU capabilities used by enrichment functions.
+
+    All values are **strings**, matching the ARM Resource SKUs API format.
+    """
+
+    vCPUs: str
+    MemoryGB: str
+    MaxDataDiskCount: str
+    PremiumIO: str
+    AcceleratedNetworkingEnabled: str
+    EphemeralOSDiskSupported: str
+    GPUs: str
+    HyperVGenerations: str
+
+
+class SkuQuota(TypedDict, total=False):
+    """Quota usage for a SKU family in a region."""
+
+    limit: int | None
+    used: int | None
+    remaining: int | None
+
+
+class SkuPricing(TypedDict, total=False):
+    """Pricing info attached by ``enrich_skus_with_prices``."""
+
+    paygo: float | None
+    spot: float | None
+    currency: str
+
+
+class SkuConfidence(TypedDict, total=False):
+    """Deployment confidence score attached by ``enrich_skus_with_confidence``."""
+
+    score: float
+    label: str
+    scoreType: str
+
+
+class SkuDict(TypedDict, total=False):
+    """Canonical dict shape for SKUs flowing through the enrichment pipeline.
+
+    This is the shape returned by :func:`azure_api.get_skus` and expected
+    by all ``enrich_skus_*`` functions.  Plugins using non-Compute-RP data
+    sources should shape their dicts to match this contract.
+    """
+
+    name: str
+    tier: str
+    size: str
+    family: str
+    zones: list[str]
+    restrictions: list[dict[str, Any]]
+    capabilities: SkuCapabilities
+    quota: SkuQuota
+    pricing: SkuPricing
+    confidence: SkuConfidence

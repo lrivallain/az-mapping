@@ -20,7 +20,6 @@ from az_scout.models.responses import (
 from az_scout.scoring.deployment_confidence import (
     best_spot_label,
     compute_deployment_confidence,
-    enrich_skus_with_confidence,
     signals_from_sku,
 )
 
@@ -97,13 +96,16 @@ async def get_skus(
         min_memory_gb=minMemoryGB,
         max_memory_gb=maxMemoryGB,
     )
-    await asyncio.to_thread(
-        azure_api.enrich_skus_with_quotas, skus, region, subscriptionId, tenantId
+    await azure_api.enrich_skus(
+        skus,
+        region,
+        subscriptionId,
+        quotas=True,
+        prices=includePrices,
+        confidence=True,
+        currency_code=currencyCode,
+        tenant_id=tenantId or "",
     )
-    if includePrices:
-        await asyncio.to_thread(azure_api.enrich_skus_with_prices, skus, region, currencyCode)
-
-    enrich_skus_with_confidence(skus)
 
     return JSONResponse(skus)
 
@@ -266,34 +268,4 @@ async def get_spot_scores(body: SpotScoresRequest) -> JSONResponse:
         body.instanceCount,
         body.tenantId,
     )
-    return JSONResponse(result)
-
-
-# ---------------------------------------------------------------------------
-# GET /api/sku-pricing
-# ---------------------------------------------------------------------------
-
-
-@router.get("/sku-pricing", tags=["Plugin: planner"], summary="Get detailed pricing for a SKU")
-async def get_sku_pricing(
-    region: str = Query(..., description="Azure region name."),
-    skuName: str = Query(..., description="ARM SKU name (e.g. Standard_D2s_v3)."),  # noqa: N803
-    currencyCode: str = Query(  # noqa: N803
-        "USD", description="ISO 4217 currency code."
-    ),
-    subscriptionId: str | None = Query(  # noqa: N803
-        None, description="Subscription ID for VM profile data."
-    ),
-    tenantId: str | None = Query(None, description="Optional tenant ID."),  # noqa: N803
-) -> JSONResponse:
-    """Return detailed Linux pricing for a single VM SKU."""
-    result = await asyncio.to_thread(
-        azure_api.get_sku_pricing_detail, region, skuName, currencyCode
-    )
-    if subscriptionId:
-        profile = await asyncio.to_thread(
-            azure_api.get_sku_profile, region, subscriptionId, skuName, tenantId
-        )
-        if profile is not None:
-            result["profile"] = profile
     return JSONResponse(result)

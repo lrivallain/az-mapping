@@ -23,6 +23,7 @@ Plugin compatibility check::
 """
 
 import time as time  # noqa: F401  # re-export for mock patching
+from typing import Any
 
 import requests as requests  # noqa: F401  # re-export for mock patching
 
@@ -112,10 +113,83 @@ from az_scout.azure_api.spot import (  # noqa: F401
     get_spot_placement_scores,
 )
 
+# -- Scoring (re-exported for plugin convenience) ---------------------------
+from az_scout.scoring.deployment_confidence import (  # noqa: F401
+    compute_deployment_confidence,
+    enrich_skus_with_confidence,
+    signals_from_sku,
+)
+
+# ---------------------------------------------------------------------------
+# Enrichment pipeline – single async call for the full enrichment chain
+# ---------------------------------------------------------------------------
+
+
+async def enrich_skus(
+    skus: list[dict[str, Any]],
+    region: str,
+    subscription_id: str,
+    *,
+    quotas: bool = False,
+    prices: bool = False,
+    confidence: bool = False,
+    spot: bool = False,
+    instance_count: int = 1,
+    currency_code: str = "USD",
+    tenant_id: str = "",
+) -> list[dict[str, Any]]:
+    """Run the full SKU enrichment pipeline in the correct order.
+
+    This is the canonical way for plugins and routes to enrich SKU dicts
+    with quota, pricing, spot scores, and deployment confidence.
+
+    Parameters are opt-in: set ``quotas=True``, ``prices=True``, etc.
+    Ordering is handled automatically (quotas before confidence, etc.).
+    Returns the same *skus* list (mutated in place) for convenience.
+    """
+    import asyncio
+
+    if quotas:
+        await asyncio.to_thread(enrich_skus_with_quotas, skus, region, subscription_id, tenant_id)
+    if prices:
+        await asyncio.to_thread(enrich_skus_with_prices, skus, region, currency_code)
+    if spot:
+        try:
+            sku_names = [s.get("name", "") for s in skus if s.get("name")]
+            if sku_names:
+                result = await asyncio.to_thread(
+                    get_spot_placement_scores,
+                    region,
+                    subscription_id,
+                    sku_names,
+                    instance_count,
+                    tenant_id,
+                )
+                scores = result.get("scores", {})
+                from az_scout.scoring.deployment_confidence import best_spot_label
+
+                for sku in skus:
+                    name = sku.get("name", "")
+                    zone_scores = scores.get(name, {})
+                    if zone_scores:
+                        sku["spot_zones"] = zone_scores
+                        sku["spot_label"] = best_spot_label(zone_scores)
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Spot placement score fetch failed; continuing without spot"
+            )
+    if confidence:
+        enrich_skus_with_confidence(skus)
+
+    return skus
+
+
 # ---------------------------------------------------------------------------
 # API version – bump major for breaking changes, minor for additions.
 # ---------------------------------------------------------------------------
-PLUGIN_API_VERSION = "1.1"
+PLUGIN_API_VERSION = "1.2"
 """Semantic version of the plugin-facing API surface (``__all__``)."""
 
 # ---------------------------------------------------------------------------
@@ -153,6 +227,12 @@ __all__ = [
     # Enrichment (mutate SKU dicts in-place)
     "enrich_skus_with_prices",
     "enrich_skus_with_quotas",
+    "enrich_skus_with_confidence",
+    # Enrichment pipeline
+    "enrich_skus",
+    # Scoring
+    "compute_deployment_confidence",
+    "signals_from_sku",
     # Standalone data fetchers
     "get_retail_prices",
     "get_sku_pricing_detail",
