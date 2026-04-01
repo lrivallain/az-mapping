@@ -20,11 +20,16 @@
     fetch(`/plugins/${PLUGIN_NAME}/static/html/example-tab.html`)
         .then(resp => resp.text())
         .then(html => {
+            // eslint-disable-next-line @microsoft/sdl/no-inner-html -- trusted HTML fragment from own server
             container.innerHTML = html;
             initExamplePlugin();
         })
         .catch(err => {
-            container.innerHTML = `<div class="alert alert-danger">Failed to load plugin UI: ${err.message}</div>`;
+            container.replaceChildren();
+            const div = document.createElement("div");
+            div.className = "alert alert-danger";
+            div.textContent = "Failed to load plugin UI: " + err.message;
+            container.appendChild(div);
         });
 
     // -----------------------------------------------------------------------
@@ -69,23 +74,34 @@
         async function refreshSubscriptions() {
             // Wait until both tenant and region are selected
             const ctx = getContext();
-            subSelect.innerHTML = "";
+            subSelect.replaceChildren();
 
             if (!ctx.tenantId || !ctx.region) {
-                subSelect.innerHTML = '<option value="">Select tenant &amp; region first</option>';
+                const opt = document.createElement("option");
+                opt.value = "";
+                opt.textContent = "Select tenant & region first";
+                subSelect.appendChild(opt);
                 subSelect.disabled = true;
                 btn.disabled = true;
                 output.textContent = "";
                 return;
             }
 
-            subSelect.innerHTML = '<option value="">Loading…</option>';
+            subSelect.replaceChildren();
+            const loadOpt = document.createElement("option");
+            loadOpt.value = "";
+            loadOpt.textContent = "Loading…";
+            subSelect.appendChild(loadOpt);
             subSelect.disabled = true;
 
             try {
                 // Reuse the main app's subscriptions API
                 const subs = await apiFetch("/api/subscriptions" + tenantQS("?"));
-                subSelect.innerHTML = '<option value="">— choose —</option>';
+                subSelect.replaceChildren();
+                const defOpt = document.createElement("option");
+                defOpt.value = "";
+                defOpt.textContent = "— choose —";
+                subSelect.appendChild(defOpt);
                 subs.forEach(s => {
                     const opt = document.createElement("option");
                     opt.value = s.id;
@@ -94,7 +110,11 @@
                 });
                 subSelect.disabled = false;
             } catch (e) {
-                subSelect.innerHTML = `<option value="">Error: ${e.message}</option>`;
+                subSelect.replaceChildren();
+                const errOpt = document.createElement("option");
+                errOpt.value = "";
+                errOpt.textContent = "Error: " + e.message;
+                subSelect.appendChild(errOpt);
                 subSelect.disabled = true;
             }
         }
