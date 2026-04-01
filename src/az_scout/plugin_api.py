@@ -214,6 +214,8 @@ class SkuCapabilities(TypedDict, total=False):
     EphemeralOSDiskSupported: str
     GPUs: str
     HyperVGenerations: str
+    CachedDiskBytes: str
+    MaxResourceVolumeMB: str
 
 
 class SkuQuota(TypedDict, total=False):
