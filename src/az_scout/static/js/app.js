@@ -38,6 +38,11 @@ function applyTheme(theme) {
         const variant = theme === "dark" ? "atom-one-dark" : "atom-one-light";
         hljsLink.href = `https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/${variant}.min.css`;
     }
+    // Sync Fluent UI Web Components v3 design tokens (bridge defined in templates/index.html).
+    // Defined after our module imports resolve, so this may be a no-op on the very first call.
+    if (typeof window.applyFluentTheme === "function") {
+        window.applyFluentTheme(theme);
+    }
 }
 
 function toggleTheme() {

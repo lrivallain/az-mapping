@@ -11,6 +11,22 @@
     <link href="https://cdn.jsdelivr.net/npm/simple-datatables@9/dist/style.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css" rel="stylesheet" id="hljs-theme">
     <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
+    <!-- Fluent UI Web Components v3 (see DESIGN.md) -->
+    <script type="module" src="https://unpkg.com/@fluentui/web-components@beta"></script>
+    <script type="module">
+        import { webLightTheme, webDarkTheme } from "https://unpkg.com/@fluentui/tokens@latest";
+        // The @fluentui/web-components bundle exposes setTheme on globalThis.
+        globalThis.__azScoutFluentThemes = { light: webLightTheme, dark: webDarkTheme };
+        globalThis.applyFluentTheme = (name) => {
+            if (typeof globalThis.setTheme === "function") {
+                globalThis.setTheme(globalThis.__azScoutFluentThemes[name] || webLightTheme);
+            }
+        };
+        // Apply the initial theme once both bundles have resolved.
+        globalThis.applyFluentTheme(
+            document.documentElement.getAttribute("data-bs-theme") || "light"
+        );
+    </script>
     {% for p in plugins %}
     {% for tab in p.tabs %}
     {% if tab.css_entry %}
@@ -41,30 +57,32 @@
             <span class="text-body-secondary small d-flex align-items-center gap-1" title="Signed in as {{ auth_user }}">
                 <i class="bi bi-person-circle"></i> {{ auth_user }}
             </span>
-            <a href="/.auth/logout" class="btn btn-sm btn-outline-secondary" title="Sign out">
-                <i class="bi bi-box-arrow-right"></i>
+            <a href="/.auth/logout" class="text-decoration-none" title="Sign out">
+                <fluent-button appearance="subtle" size="small" icon-only>
+                    <i class="bi bi-box-arrow-right"></i>
+                </fluent-button>
             </a>
             {% endif %}
             {% for p in plugins %}
             {% for action in p.navbar_actions %}
-            <button type="button" class="btn btn-sm btn-outline-secondary"
+            <fluent-button appearance="subtle" size="small" icon-only
                     id="{{ action.id }}-navbar-btn" title="{{ action.label }}"
                     data-bs-toggle="offcanvas" data-bs-target="#{{ action.id }}-offcanvas">
                 <i class="{{ action.icon }}"></i>
-            </button>
+            </fluent-button>
             {% endfor %}
             {% endfor %}
-            <button type="button" class="btn btn-sm btn-outline-secondary admin-only" id="plugin-manager-btn"
+            <fluent-button appearance="subtle" size="small" icon-only class="admin-only" id="plugin-manager-btn"
                     title="Plugin Manager" data-bs-toggle="modal" data-bs-target="#pluginModal">
                 <i class="bi bi-puzzle"></i>
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">
+            </fluent-button>
+            <fluent-button appearance="subtle" size="small" icon-only id="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">
                 <i class="bi bi-moon-fill" id="icon-dark"></i>
                 <i class="bi bi-sun-fill d-none" id="icon-light"></i>
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#aboutModal" title="About">
+            </fluent-button>
+            <fluent-button appearance="subtle" size="small" icon-only data-bs-toggle="modal" data-bs-target="#aboutModal" title="About">
                 <i class="bi bi-info-circle"></i>
-            </button>
+            </fluent-button>
         </div>
     </div>
 </nav>
@@ -304,9 +322,9 @@
         <div class="input-group">
             <textarea class="form-control" id="chat-input" placeholder="Ask about Azure SKUs, zones, pricing…"
                       rows="1" onkeydown="handleChatKeydown(event)"></textarea>
-            <button type="button" class="btn btn-primary" id="chat-send-btn" onclick="sendChatMessage()" title="Send">
+            <fluent-button appearance="primary" id="chat-send-btn" onclick="sendChatMessage()" title="Send" icon-only>
                 <i class="bi bi-send-fill"></i>
-            </button>
+            </fluent-button>
         </div>
     </div>
 </div>

@@ -7,6 +7,21 @@
     <link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Fluent UI Web Components v3 (see DESIGN.md) -->
+    <script type="module" src="https://unpkg.com/@fluentui/web-components@beta"></script>
+    <script type="module">
+        import { webLightTheme, webDarkTheme } from "https://unpkg.com/@fluentui/tokens@latest";
+        globalThis.__azScoutFluentThemes = { light: webLightTheme, dark: webDarkTheme };
+        globalThis.applyFluentTheme = (name) => {
+            if (typeof globalThis.setTheme === "function") {
+                globalThis.setTheme(globalThis.__azScoutFluentThemes[name] || webLightTheme);
+            }
+        };
+        globalThis.applyFluentTheme(
+            document.documentElement.getAttribute("data-bs-theme") || "light"
+        );
+    </script>
     <style>
         body { min-height: 100vh; display: flex; flex-direction: column; }
         .login-container { flex: 1; display: flex; align-items: center; justify-content: center; }
@@ -28,9 +43,9 @@
             <span>Azure Scout</span>
         </a>
         {% if home_tenant %}
-        <a href="/auth/login/admin" class="btn btn-outline-secondary btn-sm" title="Sign in as Admin">
+        <fluent-anchor-button href="/auth/login/admin" appearance="subtle" size="small" title="Sign in as Admin">
             <i class="bi bi-shield-lock me-1"></i> Admin
-        </a>
+        </fluent-anchor-button>
         {% endif %}
     </nav>
 
@@ -116,8 +131,10 @@
                         <div class="text-body-secondary small mb-2">
                             Sign in with your default Microsoft account. Azure will use your home tenant automatically.
                         </div>
-                        <a href="/auth/login/start" class="btn btn-primary btn-sm w-100">
-                            <i class="bi bi-person-fill me-1"></i> Sign in with your account
+                        <a href="/auth/login/start" class="text-decoration-none">
+                            <fluent-button appearance="primary" class="w-100">
+                                <i class="bi bi-person-fill me-1"></i> Sign in with your account
+                            </fluent-button>
                         </a>
                     </div>
                 </div>

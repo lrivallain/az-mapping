@@ -7,6 +7,18 @@ This project uses [Calendar Versioning](https://calver.org/) (`YYYY.MM.MICRO`).
 
 ## Unreleased
 
+### Added
+
+- **`DESIGN.md` design-token spec (#165)** – New root-level [`DESIGN.md`](DESIGN.md) authored against the [google-labs-code `design.md` v alpha](https://github.com/google-labs-code/design.md) spec. Documents the Microsoft Fluent 2 token surface adopted by az-scout (brand ramp, neutral ramp, Fluent type ramp, 4-px spacing scale, corner radii, elevation), the component library, and a migration plan for moving each surface from Bootstrap to Fluent.
+- **Fluent UI Web Components v3 (#165)** – az-scout now loads [`@fluentui/web-components@beta`](https://github.com/microsoft/fluentui/tree/master/packages/web-components) (Fluent 2) from CDN as an ES module. First-wave migration: every navbar action (sign-out, plugin actions, plugin-manager, theme toggle, About), the chat send button, and the login screen's primary buttons are now `<fluent-button>` / `<fluent-anchor-button>`. `setTheme(webLightTheme | webDarkTheme)` is wired to the existing `toggleTheme()` so the component library follows the user's dark-mode preference.
+- **`style.css` Fluent token layer** – New `:root` block defines `--fl-color-*`, `--fl-font-*`, `--fl-radius-*`, `--fl-space-*`, `--fl-elev-*`, then maps them onto Bootstrap variables (`--bs-primary`, `--bs-body-bg`, `--bs-border-radius`, …) and Fluent v3 variables (`--colorBrandBackground`, `--borderRadiusMedium`, `--shadow4`, …). Existing markup picks up the Fluent look automatically; the chat panel, modals, cards, dropdowns, and focus rings all use Fluent elevation + radii.
+
+### Changed
+
+- **Typography** – Default font stack is now Segoe UI Variable / Segoe UI / system-ui (Fluent 2), with Cascadia Code for monospace. Body size dropped to 14 px (Fluent body-1) for parity with Fluent surfaces.
+- **Theme selector** – The dead-code `[data-theme="dark"]` rule in `style.css` is replaced with `[data-bs-theme="dark"]` (the attribute that `toggleTheme()` actually emits). The About-modal dark-mode glow now uses the Fluent brand-100 colour.
+- **`frontend.instructions.md`** – Refreshed CSS guidance to point at `DESIGN.md` as the single source of truth and added a “Component library (Fluent UI Web Components v3)” section.
+
 ### Fixed
 
 - **Container image version (#159)** – the GHCR container image now reports the correct version in the UI footer, MCP banner, and `_version.py`. The Dockerfile previously copied a partial worktree alongside the full `.git/` directory, which made `git describe` return `v<tag>-dirty` and caused `hatch-vcs` to emit the next-dev version (e.g. tag `v2026.4.1` was reported as `2026.4.2.dev0` inside the container). The version is now computed on the CI host and injected into the build via the `AZ_SCOUT_VERSION` build-arg / `SETUPTOOLS_SCM_PRETEND_VERSION`, making container builds deterministic and removing `.git/` from the build context.

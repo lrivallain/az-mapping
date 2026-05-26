@@ -24,9 +24,17 @@ Reusable renderers available to all plugins via the `window.azScout.components` 
 
 ## CSS
 
-- Use CSS custom properties (defined in `:root`) for all theme colors.
-- Both light and dark themes **must** be maintained.
-- Dark mode uses `[data-theme="dark"]` and `@media (prefers-color-scheme: dark)` selectors.
+- The visual design system lives in [`DESIGN.md`](../../DESIGN.md) at the repo root — it documents the Fluent 2 token surface (brand, neutrals, type, radii, elevation) and the Fluent UI Web Components v3 component library that az-scout adopts.
+- Tokens are materialised in [`src/az_scout/static/css/style.css`](../../src/az_scout/static/css/style.css) as `--fl-*` semantic variables and mapped onto Bootstrap (`--bs-*`) and Fluent v3 (`--colorBrand*`, `--borderRadius*`, `--shadow*`) variables. Use those rather than hardcoded hexes.
+- Both light and dark themes **must** be maintained. The theme switch sets `data-bs-theme` on `<html>`; the `[data-bs-theme="dark"]` selector branch in `style.css` overrides the dark palette. The Fluent v3 bridge in `templates/index.html` mirrors the choice via `setTheme(webLightTheme|webDarkTheme)`.
+- The legacy `[data-theme="dark"]` selector is no longer emitted; do not write new rules against it.
+
+## Component library (Fluent UI Web Components v3)
+
+- Loaded from CDN as an ES module: `<script type="module" src="https://unpkg.com/@fluentui/web-components@beta">`.
+- Theme tokens from `@fluentui/tokens` are imported in the same `<script type="module">` block in [`templates/index.html`](../../src/az_scout/templates/index.html) and exposed via `globalThis.applyFluentTheme(name)`; `app.js`'s `applyTheme()` calls it whenever the user toggles light/dark.
+- New chrome should prefer `<fluent-button>`, `<fluent-text-input>`, `<fluent-dropdown>`, `<fluent-dialog>`, `<fluent-switch>`, `<fluent-badge>`, etc. — see [`DESIGN.md`](../../DESIGN.md) for the migration table.
+- Bootstrap markup keeps working: token overrides on `--bs-*` make plain `.btn`, `.card`, `.modal` look Fluent. Use Bootstrap where Fluent has no equivalent (grid, off-canvas, tab-strip drag-and-drop).
 
 ## HTML templates
 

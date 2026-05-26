@@ -20,10 +20,430 @@ select.no-arrow {
     padding-right: 0.75rem !important;
 }
 
-/* ---- Custom properties ---- */
+/* ===================================================================
+   Fluent 2 token layer (see DESIGN.md at the repo root)
+   --------------------------------------------------------------------
+   Strategy: declare semantic `--fl-*` tokens, then map them onto the
+   Bootstrap CSS variables. Existing markup keeps using `.btn`,
+   `.card`, `.modal`, etc. — the Fluent look comes from the overrides.
+   Source: https://fluent2.microsoft.design/
+   =================================================================== */
 :root {
-    --az-blue: #0078d4;
-    --az-dark: #004578;
+    /* ---- Brand ramp (Fluent 2 Communication blue) ---- */
+    --fl-color-brand-10: #061724;
+    --fl-color-brand-20: #082338;
+    --fl-color-brand-30: #0C3B5E;
+    --fl-color-brand-40: #0E4775;
+    --fl-color-brand-50: #11538B;
+    --fl-color-brand-60: #115EA3;
+    --fl-color-brand-70: #0F6CBD;     /* brand 80 == primary */
+    --fl-color-brand-80: #0F6CBD;
+    --fl-color-brand-90: #2886DE;
+    --fl-color-brand-100: #479EF5;
+    --fl-color-brand-110: #62ABF5;
+    --fl-color-brand-120: #77B7F7;
+    --fl-color-brand-130: #96C6FA;
+    --fl-color-brand-140: #CFE4FA;
+    --fl-color-brand-150: #EBF3FC;
+    --fl-color-brand-160: #F6FAFE;
+
+    --fl-color-brand-primary: var(--fl-color-brand-80);
+    --fl-color-brand-primary-hover: var(--fl-color-brand-60);
+    --fl-color-brand-primary-pressed: var(--fl-color-brand-30);
+    --fl-color-on-brand-primary: #FFFFFF;
+
+    /* ---- Neutral ramp (Fluent 2 grey) — light theme semantics ---- */
+    --fl-color-surface: #FFFFFF;
+    --fl-color-surface-alt: #FAFAFA;
+    --fl-color-surface-raised: #FFFFFF;
+    --fl-color-surface-overlay: #FFFFFF;
+    --fl-color-on-surface: #242424;
+    --fl-color-on-surface-muted: #616161;
+    --fl-color-on-surface-disabled: #BDBDBD;
+    --fl-color-border: #D1D1D1;
+    --fl-color-border-subtle: #E0E0E0;
+    --fl-color-divider: #F0F0F0;
+
+    /* ---- Status (Fluent 2 shared colors, shade 30) ---- */
+    --fl-color-success: #107C10;
+    --fl-color-success-bg: #DFF6DD;
+    --fl-color-warning: #F7630C;
+    --fl-color-warning-bg: #FFF4CE;
+    --fl-color-danger: #C50F1F;
+    --fl-color-danger-bg: #FDE7E9;
+    --fl-color-info: var(--fl-color-brand-primary);
+    --fl-color-info-bg: var(--fl-color-brand-160);
+
+    /* ---- Type ramp (Fluent 2) ---- */
+    --fl-font-base: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI",
+                    system-ui, -apple-system, BlinkMacSystemFont,
+                    "Helvetica Neue", Arial, sans-serif;
+    --fl-font-display: "Segoe UI Variable Display", "Segoe UI Variable",
+                       "Segoe UI", system-ui, sans-serif;
+    --fl-font-mono: "Cascadia Code", "Cascadia Mono", "SFMono-Regular",
+                    Consolas, "Liberation Mono", monospace;
+
+    /* ---- Corner radii (Fluent 2) ---- */
+    --fl-radius-none: 0;
+    --fl-radius-sm: 2px;
+    --fl-radius-md: 4px;
+    --fl-radius-lg: 6px;
+    --fl-radius-xl: 8px;
+    --fl-radius-circular: 9999px;
+
+    /* ---- Spacing (Fluent 2, 4-px base) ---- */
+    --fl-space-xxs: 2px;
+    --fl-space-xs: 4px;
+    --fl-space-s: 8px;
+    --fl-space-m: 12px;
+    --fl-space-l: 16px;
+    --fl-space-xl: 20px;
+    --fl-space-xxl: 24px;
+    --fl-space-xxxl: 32px;
+
+    /* ---- Elevation (Fluent 2 shadow ramp) ---- */
+    --fl-elev-2:  0 0 2px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.14);
+    --fl-elev-4:  0 0 2px rgba(0, 0, 0, 0.12), 0 2px 4px rgba(0, 0, 0, 0.14);
+    --fl-elev-8:  0 0 2px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.14);
+    --fl-elev-16: 0 0 2px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.14);
+    --fl-elev-28: 0 0 8px rgba(0, 0, 0, 0.12), 0 14px 28px rgba(0, 0, 0, 0.14);
+    --fl-elev-64: 0 0 8px rgba(0, 0, 0, 0.12), 0 32px 64px rgba(0, 0, 0, 0.14);
+
+    /* ---- Legacy aliases (kept for sibling plugins) ---- */
+    --az-blue: var(--fl-color-brand-primary);
+    --az-dark: var(--fl-color-brand-primary-pressed);
+
+    /* ===== Bootstrap variable overrides — light theme ===== */
+    --bs-primary: var(--fl-color-brand-primary);
+    --bs-primary-rgb: 15, 108, 189;
+    --bs-link-color: var(--fl-color-brand-primary);
+    --bs-link-color-rgb: 15, 108, 189;
+    --bs-link-hover-color: var(--fl-color-brand-primary-hover);
+    --bs-link-hover-color-rgb: 17, 94, 163;
+
+    --bs-body-bg: var(--fl-color-surface);
+    --bs-body-bg-rgb: 255, 255, 255;
+    --bs-body-color: var(--fl-color-on-surface);
+    --bs-body-color-rgb: 36, 36, 36;
+    --bs-secondary-color: var(--fl-color-on-surface-muted);
+    --bs-secondary-color-rgb: 97, 97, 97;
+    --bs-secondary-bg: var(--fl-color-divider);
+    --bs-tertiary-bg: var(--fl-color-surface-alt);
+    --bs-tertiary-color: var(--fl-color-on-surface-muted);
+    --bs-emphasis-color: var(--fl-color-on-surface);
+
+    --bs-border-color: var(--fl-color-border);
+    --bs-border-color-translucent: rgba(0, 0, 0, 0.10);
+    --bs-border-radius: var(--fl-radius-md);
+    --bs-border-radius-sm: var(--fl-radius-sm);
+    --bs-border-radius-lg: var(--fl-radius-lg);
+    --bs-border-radius-xl: var(--fl-radius-xl);
+
+    --bs-success: var(--fl-color-success);
+    --bs-success-rgb: 16, 124, 16;
+    --bs-warning: var(--fl-color-warning);
+    --bs-warning-rgb: 247, 99, 12;
+    --bs-danger: var(--fl-color-danger);
+    --bs-danger-rgb: 197, 15, 31;
+    --bs-info: var(--fl-color-info);
+    --bs-info-rgb: 15, 108, 189;
+
+    --bs-body-font-family: var(--fl-font-base);
+    --bs-body-font-size: 0.875rem;       /* Fluent body-1: 14 px */
+    --bs-body-line-height: 1.43;          /* 20 / 14 */
+    --bs-font-monospace: var(--fl-font-mono);
+
+    --bs-box-shadow-sm: var(--fl-elev-2);
+    --bs-box-shadow: var(--fl-elev-4);
+    --bs-box-shadow-lg: var(--fl-elev-16);
+
+    --bs-focus-ring-width: 2px;
+    --bs-focus-ring-opacity: 1;
+    --bs-focus-ring-color: var(--fl-color-brand-primary);
+}
+
+/* ===================================================================
+   Dark theme — Fluent 2 dark canvas (grey8 + neutral ramp inverted)
+   =================================================================== */
+[data-bs-theme="dark"] {
+    --fl-color-surface: #141414;
+    --fl-color-surface-alt: #1F1F1F;
+    --fl-color-surface-raised: #292929;
+    --fl-color-surface-overlay: #333333;
+    --fl-color-on-surface: #F5F5F5;
+    --fl-color-on-surface-muted: #D6D6D6;
+    --fl-color-on-surface-disabled: #5C5C5C;
+    --fl-color-border: #525252;
+    --fl-color-border-subtle: #383838;
+    --fl-color-divider: #292929;
+
+    --fl-color-brand-primary: var(--fl-color-brand-100);
+    --fl-color-brand-primary-hover: var(--fl-color-brand-110);
+    --fl-color-brand-primary-pressed: var(--fl-color-brand-130);
+    --fl-color-on-brand-primary: #FFFFFF;
+
+    --fl-color-success: #54B054;
+    --fl-color-success-bg: #143A14;
+    --fl-color-warning: #FCE100;
+    --fl-color-warning-bg: #463A0A;
+    --fl-color-danger: #E37D80;
+    --fl-color-danger-bg: #442726;
+    --fl-color-info-bg: #0E2A40;
+
+    --bs-primary: var(--fl-color-brand-primary);
+    --bs-primary-rgb: 71, 158, 245;
+    --bs-link-color: var(--fl-color-brand-primary);
+    --bs-link-color-rgb: 71, 158, 245;
+    --bs-link-hover-color: var(--fl-color-brand-primary-hover);
+    --bs-link-hover-color-rgb: 98, 171, 245;
+
+    --bs-body-bg: var(--fl-color-surface);
+    --bs-body-bg-rgb: 20, 20, 20;
+    --bs-body-color: var(--fl-color-on-surface);
+    --bs-body-color-rgb: 245, 245, 245;
+    --bs-secondary-color: var(--fl-color-on-surface-muted);
+    --bs-secondary-color-rgb: 214, 214, 214;
+    --bs-secondary-bg: var(--fl-color-divider);
+    --bs-tertiary-bg: var(--fl-color-surface-alt);
+    --bs-tertiary-color: var(--fl-color-on-surface-muted);
+    --bs-emphasis-color: var(--fl-color-on-surface);
+
+    --bs-border-color: var(--fl-color-border);
+    --bs-border-color-translucent: rgba(255, 255, 255, 0.10);
+
+    --bs-success: var(--fl-color-success);
+    --bs-success-rgb: 84, 176, 84;
+    --bs-warning: var(--fl-color-warning);
+    --bs-warning-rgb: 252, 225, 0;
+    --bs-danger: var(--fl-color-danger);
+    --bs-danger-rgb: 227, 125, 128;
+    --bs-info-rgb: 71, 158, 245;
+
+    --bs-focus-ring-color: var(--fl-color-brand-primary);
+
+    /* Dark theme keeps the same elevation values — Fluent treats
+       elevation as a property of the surface, not a colour swap. */
+}
+
+/* ===================================================================
+   Fluent body + focus ring
+   =================================================================== */
+body {
+    font-family: var(--fl-font-base);
+    font-feature-settings: "ss01", "ss03", "cv11"; /* Segoe UI Variable optical refinements */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Fluent display family for headings */
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6,
+.modal-title, .navbar-brand {
+    font-family: var(--fl-font-display);
+    font-weight: 600;
+    letter-spacing: -0.005em;
+}
+
+code, kbd, samp, pre,
+.font-monospace, .chat-table code, .chat-bubble code, .chat-bubble pre {
+    font-family: var(--fl-font-mono);
+}
+
+/* Fluent focus ring — keyboard navigation only */
+*:focus { outline: none; }
+*:focus-visible {
+    outline: 2px solid var(--fl-color-brand-primary);
+    outline-offset: 2px;
+    border-radius: var(--fl-radius-sm);
+}
+.btn:focus-visible,
+.form-control:focus-visible,
+.form-select:focus-visible {
+    box-shadow: 0 0 0 2px var(--bs-body-bg),
+                0 0 0 4px var(--fl-color-brand-primary);
+    outline: none;
+}
+
+/* Fluent button surfaces */
+.btn {
+    --bs-btn-border-radius: var(--fl-radius-md);
+    font-weight: 600;
+    transition: background-color 0.1s ease-out,
+                border-color 0.1s ease-out,
+                color 0.1s ease-out,
+                box-shadow 0.1s ease-out;
+}
+.btn-primary {
+    --bs-btn-bg: var(--fl-color-brand-primary);
+    --bs-btn-border-color: var(--fl-color-brand-primary);
+    --bs-btn-hover-bg: var(--fl-color-brand-primary-hover);
+    --bs-btn-hover-border-color: var(--fl-color-brand-primary-hover);
+    --bs-btn-active-bg: var(--fl-color-brand-primary-pressed);
+    --bs-btn-active-border-color: var(--fl-color-brand-primary-pressed);
+}
+.btn-outline-secondary {
+    --bs-btn-color: var(--fl-color-on-surface);
+    --bs-btn-border-color: var(--fl-color-border);
+    --bs-btn-hover-bg: var(--fl-color-surface-alt);
+    --bs-btn-hover-border-color: var(--fl-color-border);
+    --bs-btn-hover-color: var(--fl-color-on-surface);
+    --bs-btn-active-bg: var(--fl-color-divider);
+    --bs-btn-active-border-color: var(--fl-color-border);
+    --bs-btn-active-color: var(--fl-color-on-surface);
+}
+
+/* Cards & modals follow Fluent radii + elevation */
+.card {
+    --bs-card-border-radius: var(--fl-radius-lg);
+    --bs-card-inner-border-radius: var(--fl-radius-lg);
+    --bs-card-border-color: var(--fl-color-border-subtle);
+    box-shadow: var(--fl-elev-4);
+}
+.modal-content {
+    --bs-modal-border-radius: var(--fl-radius-xl);
+    --bs-modal-inner-border-radius: var(--fl-radius-xl);
+    border: 1px solid var(--fl-color-border-subtle);
+    box-shadow: var(--fl-elev-28);
+}
+.dropdown-menu {
+    --bs-dropdown-border-radius: var(--fl-radius-md);
+    --bs-dropdown-border-color: var(--fl-color-border);
+    box-shadow: var(--fl-elev-8);
+}
+.offcanvas {
+    --bs-offcanvas-border-color: var(--fl-color-border-subtle);
+    box-shadow: var(--fl-elev-16);
+}
+
+/* Navbar: Fluent surface-alt, no shadow, 1-px divider */
+.navbar.bg-body-tertiary {
+    background-color: var(--fl-color-surface-alt) !important;
+    border-bottom-color: var(--fl-color-border-subtle) !important;
+    min-height: 48px;
+}
+
+/* Form controls inherit Fluent radii + 1-px border */
+.form-control,
+.form-select,
+.input-group-text {
+    border-color: var(--fl-color-border);
+    border-radius: var(--fl-radius-md);
+}
+
+/* Tab strip: Fluent indicator under active pill */
+.nav-tabs {
+    --bs-nav-tabs-border-color: var(--fl-color-border-subtle);
+    --bs-nav-tabs-link-active-border-color: transparent transparent var(--fl-color-brand-primary);
+    --bs-nav-tabs-link-hover-border-color: transparent transparent var(--fl-color-border);
+    border-bottom-width: 1px;
+}
+.nav-tabs .nav-link {
+    border-radius: var(--fl-radius-md) var(--fl-radius-md) 0 0;
+    border-bottom-width: 2px;
+    color: var(--fl-color-on-surface-muted);
+    transition: color 0.1s ease-out, border-color 0.1s ease-out;
+}
+.nav-tabs .nav-link.active {
+    color: var(--fl-color-brand-primary);
+    font-weight: 600;
+    background-color: transparent;
+}
+
+/* Badges + alerts: Fluent rounding */
+.badge {
+    border-radius: var(--fl-radius-md);
+    font-weight: 600;
+}
+.alert {
+    border-radius: var(--fl-radius-lg);
+}
+
+/* ===================================================================
+   Fluent UI Web Components v3 — layout shims
+   --------------------------------------------------------------------
+   Fluent web components style themselves from their own design tokens
+   (--colorBrandBackground, --borderRadiusMedium, …). The CDN bundle's
+   setTheme() call (wired via window.applyFluentTheme in app.js + the
+   bootstrap snippet in index.html) ships the full Fluent palette.
+   The tokens below act as a safety net for the brief window before
+   that ES module resolves, so the components are never unstyled.
+   =================================================================== */
+:root {
+    /* Brand */
+    --colorBrandBackground: var(--fl-color-brand-primary);
+    --colorBrandBackgroundHover: var(--fl-color-brand-primary-hover);
+    --colorBrandBackgroundPressed: var(--fl-color-brand-primary-pressed);
+    --colorBrandBackgroundSelected: var(--fl-color-brand-primary-pressed);
+    --colorNeutralForegroundOnBrand: #FFFFFF;
+
+    /* Neutral surfaces */
+    --colorNeutralBackground1: var(--fl-color-surface);
+    --colorNeutralBackground2: var(--fl-color-surface-alt);
+    --colorNeutralBackground3: var(--fl-color-divider);
+    --colorNeutralForeground1: var(--fl-color-on-surface);
+    --colorNeutralForeground2: var(--fl-color-on-surface-muted);
+    --colorNeutralStroke1: var(--fl-color-border);
+    --colorNeutralStroke2: var(--fl-color-border-subtle);
+
+    /* Radii */
+    --borderRadiusNone: 0;
+    --borderRadiusSmall: var(--fl-radius-sm);
+    --borderRadiusMedium: var(--fl-radius-md);
+    --borderRadiusLarge: var(--fl-radius-lg);
+    --borderRadiusXLarge: var(--fl-radius-xl);
+    --borderRadiusCircular: var(--fl-radius-circular);
+
+    /* Typography */
+    --fontFamilyBase: var(--fl-font-base);
+    --fontFamilyMonospace: var(--fl-font-mono);
+    --fontSizeBase100: 10px;
+    --fontSizeBase200: 12px;
+    --fontSizeBase300: 14px;
+    --fontSizeBase400: 16px;
+    --lineHeightBase100: 14px;
+    --lineHeightBase200: 16px;
+    --lineHeightBase300: 20px;
+
+    /* Elevation */
+    --shadow2: var(--fl-elev-2);
+    --shadow4: var(--fl-elev-4);
+    --shadow8: var(--fl-elev-8);
+    --shadow16: var(--fl-elev-16);
+    --shadow28: var(--fl-elev-28);
+}
+
+[data-bs-theme="dark"] {
+    --colorBrandBackground: var(--fl-color-brand-primary);
+    --colorBrandBackgroundHover: var(--fl-color-brand-primary-hover);
+    --colorBrandBackgroundPressed: var(--fl-color-brand-primary-pressed);
+    --colorNeutralBackground1: var(--fl-color-surface);
+    --colorNeutralBackground2: var(--fl-color-surface-alt);
+    --colorNeutralBackground3: var(--fl-color-divider);
+    --colorNeutralForeground1: var(--fl-color-on-surface);
+    --colorNeutralForeground2: var(--fl-color-on-surface-muted);
+    --colorNeutralStroke1: var(--fl-color-border);
+    --colorNeutralStroke2: var(--fl-color-border-subtle);
+}
+
+/* Sit nicely in the Bootstrap navbar gap container */
+.navbar fluent-button,
+.navbar fluent-anchor-button {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+}
+
+/* Match the chat composer textarea height & input-group geometry */
+.chat-input-area fluent-button {
+    border-radius: 0 var(--fl-radius-md) var(--fl-radius-md) 0;
+    min-height: 100%;
+    align-self: stretch;
+}
+
+/* Anchor wrappers used to give fluent-anchor-button hooks should not show their own focus underline */
+.navbar a:has(> fluent-button),
+.navbar a:has(> fluent-anchor-button) {
+    color: inherit;
 }
 
 /* ---- Region combobox dropdown ---- */
@@ -662,15 +1082,9 @@ body.chat-pinned > footer {
     padding-top: 0;
 }
 
-/* Dark-mode glow adjustment */
-[data-theme="dark"] .about-logo-wrap {
-    background: radial-gradient(circle, rgba(0, 120, 212, 0.25) 0%, transparent 70%);
-}
-
-@media (prefers-color-scheme: dark) {
-    :not([data-theme="light"]) .about-logo-wrap {
-        background: radial-gradient(circle, rgba(0, 120, 212, 0.25) 0%, transparent 70%);
-    }
+/* Dark-mode glow adjustment (Bootstrap theme switch uses data-bs-theme) */
+[data-bs-theme="dark"] .about-logo-wrap {
+    background: radial-gradient(circle, rgba(71, 158, 245, 0.25) 0%, transparent 70%);
 }
 
 /* ── Tab drag-and-drop reordering ── */
