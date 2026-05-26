@@ -8,19 +8,22 @@
             <div class="input-group input-group-sm mb-1">
                 <input type="search" class="form-control" id="topo-sub-filter"
                        placeholder="Filter…" autocomplete="off" spellcheck="false">
-                <button type="button" class="btn btn-outline-secondary" onclick="topoSelectAllVisible()" title="Select visible">
+                <fluent-button appearance="outline" size="small" icon-only
+                        onclick="topoSelectAllVisible()" title="Select visible">
                     <i class="bi bi-check-all"></i>
-                </button>
-                <button type="button" class="btn btn-outline-secondary" onclick="topoDeselectAll()" title="Clear all">
+                </fluent-button>
+                <fluent-button appearance="outline" size="small" icon-only
+                        onclick="topoDeselectAll()" title="Clear all">
                     <i class="bi bi-x-lg"></i>
-                </button>
+                </fluent-button>
             </div>
             <div id="topo-sub-list" data-testid="topo-sub-list" class="subscription-checklist"></div>
             <div class="d-flex justify-content-between align-items-center mt-2">
                 <small class="text-body-secondary" id="topo-sub-count">0 selected</small>
-                <button type="button" class="btn btn-primary btn-sm" id="topo-load-btn" data-testid="topo-load-btn" onclick="loadMappings()" disabled>
+                <fluent-button appearance="primary" size="small" id="topo-load-btn"
+                        data-testid="topo-load-btn" onclick="loadMappings()" disabled>
                     <i class="bi bi-arrow-repeat"></i> Load
-                </button>
+                </fluent-button>
             </div>
         </div>
     </div>
@@ -28,7 +31,7 @@
     <!-- Right content: results -->
     <div class="col-md-9 col-xl-10">
         <!-- Error -->
-        <div id="topo-error" data-testid="topo-error" class="alert alert-danger alert-sm d-none" role="alert"></div>
+        <div id="topo-error" data-testid="topo-error" class="app-alert app-alert-danger d-none" role="alert"></div>
 
         <!-- Empty state -->
         <div id="topo-empty" data-testid="topo-empty" class="text-center text-body-secondary py-5">
@@ -48,9 +51,10 @@
             <div class="card mb-3">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <span><i class="bi bi-diagram-3"></i> Zone Mapping Graph</span>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="exportGraphPNG()" title="Export as PNG">
+                    <fluent-button appearance="outline" size="small"
+                            onclick="exportGraphPNG()" title="Export as PNG">
                         <i class="bi bi-download"></i> PNG
-                    </button>
+                    </fluent-button>
                 </div>
                 <div class="card-body">
                     <div id="graph-container" data-testid="graph-container" class="graph-container mx-auto"></div>
@@ -62,9 +66,10 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <span><i class="bi bi-table"></i> Zone Mapping Table</span>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="exportTableCSV()" title="Export as CSV">
+                    <fluent-button appearance="outline" size="small"
+                            onclick="exportTableCSV()" title="Export as CSV">
                         <i class="bi bi-download"></i> CSV
-                    </button>
+                    </fluent-button>
                 </div>
                 <div class="card-body">
                     <div id="table-container" data-testid="table-container" class="table-responsive"></div>
