@@ -45,59 +45,57 @@
     {% endfor %}
     <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
-<body class="d-flex flex-column min-vh-100">
+<body class="app-body">
 
 <!-- ===== Navbar ===== -->
-<nav class="navbar navbar-expand-sm bg-body-tertiary border-bottom">
-    <div class="container-fluid">
-        <a class="navbar-brand d-flex align-items-center gap-2" href="#">
-            <img src="{{ url_for('static', path='img/favicon.svg') }}" width="26" height="26" alt="">
-            <span>Azure Scout</span>
+<nav class="app-navbar">
+    <a class="app-navbar-brand" href="#">
+        <img src="{{ url_for('static', path='img/favicon.svg') }}" width="26" height="26" alt="">
+        <span>Azure Scout</span>
+    </a>
+    <div class="app-navbar-actions">
+        <!-- OBO Auth (shown when configured) -->
+        <span id="auth-container" style="display:none" class="app-navbar-actions"></span>
+        {% if auth_user %}
+        <span class="app-navbar-user" title="Signed in as {{ auth_user }}">
+            <i class="bi bi-person-circle"></i> {{ auth_user }}
+        </span>
+        <a href="/.auth/logout" class="text-decoration-none" title="Sign out">
+            <fluent-button appearance="subtle" size="small" icon-only>
+                <i class="bi bi-box-arrow-right"></i>
+            </fluent-button>
         </a>
-        <div class="d-flex align-items-center gap-2">
-            <!-- OBO Auth (shown when configured) -->
-            <span id="auth-container" style="display:none" class="d-flex align-items-center gap-2"></span>
-            {% if auth_user %}
-            <span class="text-body-secondary small d-flex align-items-center gap-1" title="Signed in as {{ auth_user }}">
-                <i class="bi bi-person-circle"></i> {{ auth_user }}
-            </span>
-            <a href="/.auth/logout" class="text-decoration-none" title="Sign out">
-                <fluent-button appearance="subtle" size="small" icon-only>
-                    <i class="bi bi-box-arrow-right"></i>
-                </fluent-button>
-            </a>
-            {% endif %}
-            {% for p in plugins %}
-            {% for action in p.navbar_actions %}
-            <fluent-button appearance="subtle" size="small" icon-only
-                    id="{{ action.id }}-navbar-btn" title="{{ action.label }}"
-                    data-bs-toggle="offcanvas" data-bs-target="#{{ action.id }}-offcanvas">
-                <i class="{{ action.icon }}"></i>
-            </fluent-button>
-            {% endfor %}
-            {% endfor %}
-            <fluent-button appearance="subtle" size="small" icon-only class="admin-only" id="plugin-manager-btn"
-                    title="Plugin Manager" data-bs-toggle="modal" data-bs-target="#pluginModal">
-                <i class="bi bi-puzzle"></i>
-            </fluent-button>
-            <fluent-button appearance="subtle" size="small" icon-only id="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">
-                <i class="bi bi-moon-fill" id="icon-dark"></i>
-                <i class="bi bi-sun-fill d-none" id="icon-light"></i>
-            </fluent-button>
-            <fluent-button appearance="subtle" size="small" icon-only data-bs-toggle="modal" data-bs-target="#aboutModal" title="About">
-                <i class="bi bi-info-circle"></i>
-            </fluent-button>
-        </div>
+        {% endif %}
+        {% for p in plugins %}
+        {% for action in p.navbar_actions %}
+        <fluent-button appearance="subtle" size="small" icon-only
+                id="{{ action.id }}-navbar-btn" title="{{ action.label }}"
+                data-bs-toggle="offcanvas" data-bs-target="#{{ action.id }}-offcanvas">
+            <i class="{{ action.icon }}"></i>
+        </fluent-button>
+        {% endfor %}
+        {% endfor %}
+        <fluent-button appearance="subtle" size="small" icon-only class="admin-only" id="plugin-manager-btn"
+                title="Plugin Manager" data-bs-toggle="modal" data-bs-target="#pluginModal">
+            <i class="bi bi-puzzle"></i>
+        </fluent-button>
+        <fluent-button appearance="subtle" size="small" icon-only id="theme-toggle" onclick="toggleTheme()" title="Toggle dark/light mode">
+            <i class="bi bi-moon-fill" id="icon-dark"></i>
+            <i class="bi bi-sun-fill d-none" id="icon-light"></i>
+        </fluent-button>
+        <fluent-button appearance="subtle" size="small" icon-only data-bs-toggle="modal" data-bs-target="#aboutModal" title="About">
+            <i class="bi bi-info-circle"></i>
+        </fluent-button>
     </div>
 </nav>
 
 <!-- ===== Main content ===== -->
-<div class="container-fluid mt-3 flex-grow-1 overflow-auto pb-4">
+<main class="app-main">
 <div id="main-content">
 
     <!-- Shared selectors: Tenant + Region -->
-    <div class="row mb-2 g-2 align-items-center" id="selector-bar">
-        <div class="col-auto" id="tenant-section">
+    <div class="app-selector-bar" id="selector-bar">
+        <div id="tenant-section">
             <div class="input-group input-group-sm">
                 <span class="input-group-text"><i class="bi bi-shield-lock"></i> Tenant</span>
                 <select class="form-select form-select-sm" id="tenant-select" data-testid="tenant-select" style="max-width:320px;">
@@ -105,7 +103,7 @@
                 </select>
             </div>
         </div>
-        <div class="col-auto">
+        <div>
             <div class="position-relative" id="region-combobox">
                 <div class="input-group input-group-sm">
                     <span class="input-group-text"><i class="bi bi-geo-alt"></i> Region</span>
@@ -156,10 +154,8 @@
         {% if p.internal %}
         {% for tab in p.tabs %}
         <div class="tab-pane fade{% if ns2.first_pane %} show active{% endif %}" id="tab-{{ tab.id }}" role="tabpanel" aria-labelledby="{{ tab.id }}-tab">
-            <div class="card border-top-0 rounded-top-0">
-                <div class="card-body" id="plugin-tab-{{ tab.id }}">
-                    <!-- Internal plugin "{{ tab.label }}" content is populated by its JS entry -->
-                </div>
+            <div class="plugin-tab-pane" id="plugin-tab-{{ tab.id }}">
+                <!-- Internal plugin "{{ tab.label }}" content is populated by its JS entry -->
             </div>
         </div>
         {% set ns2.first_pane = false %}
@@ -171,10 +167,8 @@
         {% if not p.internal %}
         {% for tab in p.tabs %}
         <div class="tab-pane fade" id="tab-{{ tab.id }}" role="tabpanel" aria-labelledby="{{ tab.id }}-tab">
-            <div class="card border-top-0 rounded-top-0">
-                <div class="card-body" id="plugin-tab-{{ tab.id }}">
-                    <!-- Plugin "{{ tab.label }}" content is populated by its JS entry -->
-                </div>
+            <div class="plugin-tab-pane" id="plugin-tab-{{ tab.id }}">
+                <!-- Plugin "{{ tab.label }}" content is populated by its JS entry -->
             </div>
         </div>
         {% endfor %}
@@ -182,10 +176,11 @@
         {% endfor %}
 
     </div><!-- /tab-content -->
-</div><!-- /container -->
+</div><!-- /#main-content -->
+</main>
 
 <!-- ===== Footer ===== -->
-<footer class="border-top py-2 text-center small text-body-secondary mt-auto">
+<footer class="app-footer">
     <span>v{{ version }}</span> ·
     <span>MIT License</span> ·
     <span>Independent Azure analysis tool — not affiliated with Microsoft.</span>
@@ -276,7 +271,7 @@
                 {% endif %}
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                <fluent-button appearance="secondary" size="small" data-bs-dismiss="modal">Close</fluent-button>
             </div>
         </div>
     </div>

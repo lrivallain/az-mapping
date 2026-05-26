@@ -17,7 +17,7 @@ def test_page_loads_with_title(page: Page, base_url: str) -> None:
 def test_navbar_visible(page: Page, base_url: str) -> None:
     """The navbar with the brand name is visible."""
     page.goto(base_url)
-    brand = page.locator(".navbar-brand")
+    brand = page.locator(".app-navbar-brand")
     expect(brand).to_be_visible()
     expect(brand).to_contain_text("Azure Scout")
 

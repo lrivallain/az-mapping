@@ -5,13 +5,17 @@
      1. App-wide utilities (.admin-only, select.no-arrow)
      2. Fluent 2 token layer + Bootstrap variable bridge   (see DESIGN.md)
      3. Dark-theme overrides                                (data-bs-theme)
-     4. Fluent body + focus ring
-     5. Bootstrap component overrides — kept for plugin compatibility
+     4. Fluent typography (body, headings, monospace)
+     5. App-* layout chrome — used by core templates only   (navbar,
+        main container, selector bar, tab-pane wrapper, footer,
+        inline alert callouts)
+     6. Fluent focus ring (global)
+     7. Bootstrap component overrides — kept for plugin compatibility
         (sibling plugins still emit .btn / .card / .modal / .nav-tabs /
         .form-control / .alert / .badge / .offcanvas markup).
-     6. Fluent UI Web Components v3 token shims — fallback that gives
+     8. Fluent UI Web Components v3 token shims — fallback that gives
         every <fluent-*> a reasonable look before setTheme() resolves.
-     7. Feature-specific styles (region combobox, chat panel, About
+     9. Feature-specific styles (region combobox, chat panel, About
         modal, tab drag-and-drop).
    =================================================================== */
 
@@ -243,7 +247,7 @@ select.no-arrow {
 }
 
 /* ===================================================================
-   Fluent body + focus ring
+   Fluent typography
    =================================================================== */
 body {
     font-family: var(--fl-font-base);
@@ -255,7 +259,7 @@ body {
 /* Fluent display family for headings */
 h1, h2, h3, h4, h5, h6,
 .h1, .h2, .h3, .h4, .h5, .h6,
-.modal-title, .navbar-brand {
+.modal-title, .navbar-brand, .app-navbar-brand {
     font-family: var(--fl-font-display);
     font-weight: 600;
     letter-spacing: -0.005em;
@@ -266,7 +270,126 @@ code, kbd, samp, pre,
     font-family: var(--fl-font-mono);
 }
 
-/* Fluent focus ring — keyboard navigation only */
+/* ===================================================================
+   App-* layout chrome (used by core templates only)
+   --------------------------------------------------------------------
+   Replaces Bootstrap layout utilities (.navbar, .container-fluid,
+   .card wrappers, .alert, .row/.col-* for the selector bar, footer
+   utilities). Plugins keep using Bootstrap markup; the core uses
+   these semantic classes built on --fl-* tokens.
+   =================================================================== */
+
+/* Body: column flex container, full viewport height */
+.app-body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* Navbar: 48-px Fluent surface-alt with 1-px border */
+.app-navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--fl-space-m);
+    padding: 0 var(--fl-space-l);
+    min-height: 48px;
+    background-color: var(--fl-color-surface-alt);
+    border-bottom: 1px solid var(--fl-color-border-subtle);
+}
+.app-navbar-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--fl-space-s);
+    color: var(--fl-color-on-surface);
+    text-decoration: none;
+    font-family: var(--fl-font-display);
+    font-weight: 600;
+}
+.app-navbar-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--fl-space-s);
+}
+
+/* Navbar user-info badge (auth_user) */
+.app-navbar-user {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--fl-space-xs);
+    color: var(--fl-color-on-surface-muted);
+    font-size: 0.78rem;
+}
+
+/* Main content container: full width, scrollable, bottom-padded */
+.app-main {
+    flex: 1 1 auto;
+    overflow: auto;
+    padding: var(--fl-space-m) var(--fl-space-l) var(--fl-space-xl);
+}
+
+/* Selector bar (tenant + region row) */
+.app-selector-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--fl-space-s);
+    margin-bottom: var(--fl-space-s);
+}
+
+/* Plugin tab pane wrapper (was .card.border-top-0.rounded-top-0 + .card-body) */
+.plugin-tab-pane {
+    background-color: var(--fl-color-surface);
+    border: 1px solid var(--fl-color-border-subtle);
+    border-top: 0;
+    border-radius: 0 0 var(--fl-radius-lg) var(--fl-radius-lg);
+    padding: var(--fl-space-l);
+    box-shadow: var(--fl-elev-2);
+}
+
+/* Footer: centered, muted, top border */
+.app-footer {
+    margin-top: auto;
+    padding: var(--fl-space-s) var(--fl-space-l);
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--fl-color-on-surface-muted);
+    border-top: 1px solid var(--fl-color-border-subtle);
+}
+
+/* Inline alert callouts (login.html) — colour-coded surface */
+.app-alert {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--fl-space-s);
+    padding: var(--fl-space-m) var(--fl-space-l);
+    border: 1px solid transparent;
+    border-radius: var(--fl-radius-lg);
+    margin-bottom: var(--fl-space-l);
+    text-align: left;
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+.app-alert > i {
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+    font-size: 1.05rem;
+    line-height: 1;
+}
+.app-alert-warning {
+    background-color: var(--fl-color-warning-bg);
+    border-color: var(--fl-color-warning);
+    color: var(--fl-color-on-surface);
+}
+.app-alert-danger {
+    background-color: var(--fl-color-danger-bg);
+    border-color: var(--fl-color-danger);
+    color: var(--fl-color-on-surface);
+}
+
+/* ===================================================================
+   Fluent focus ring — keyboard navigation only
+   =================================================================== */
 *:focus { outline: none; }
 *:focus-visible {
     outline: 2px solid var(--fl-color-brand-primary);
@@ -442,9 +565,11 @@ code, kbd, samp, pre,
     --shadow28: var(--fl-elev-28);
 }
 
-/* Sit nicely in the Bootstrap navbar gap container */
+/* Sit nicely in the navbar gap container (Bootstrap .navbar — plugins; .app-navbar — core) */
 .navbar fluent-button,
-.navbar fluent-anchor-button {
+.navbar fluent-anchor-button,
+.app-navbar fluent-button,
+.app-navbar fluent-anchor-button {
     display: inline-flex;
     align-items: center;
     vertical-align: middle;
@@ -459,7 +584,9 @@ code, kbd, samp, pre,
 
 /* Anchor wrappers used to give fluent-anchor-button hooks should not show their own focus underline */
 .navbar a:has(> fluent-button),
-.navbar a:has(> fluent-anchor-button) {
+.navbar a:has(> fluent-anchor-button),
+.app-navbar a:has(> fluent-button),
+.app-navbar a:has(> fluent-anchor-button) {
     color: inherit;
 }
 
@@ -830,9 +957,9 @@ body.chat-pinned .chat-panel .chat-resize-handle::after {
 body.chat-pinned .chat-fab {
     display: none;
 }
-body.chat-pinned > .navbar,
-body.chat-pinned > .container-fluid,
-body.chat-pinned > footer {
+body.chat-pinned > .app-navbar,
+body.chat-pinned > .app-main,
+body.chat-pinned > .app-footer {
     transition: padding-right 0.2s ease;
     padding-right: var(--chat-pinned-width, 420px);
 }
