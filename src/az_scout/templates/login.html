@@ -9,14 +9,13 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11/font/bootstrap-icons.min.css" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css">
     <!-- Fluent UI Web Components v3 (see DESIGN.md) -->
-    <script type="module" src="https://unpkg.com/@fluentui/web-components@beta"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@fluentui/web-components@beta/dist/web-components.min.js"></script>
     <script type="module">
-        import { webLightTheme, webDarkTheme } from "https://unpkg.com/@fluentui/tokens@latest";
+        import { setTheme } from "https://cdn.jsdelivr.net/npm/@fluentui/web-components@beta/+esm";
+        import { webLightTheme, webDarkTheme } from "https://cdn.jsdelivr.net/npm/@fluentui/tokens@latest/+esm";
         globalThis.__azScoutFluentThemes = { light: webLightTheme, dark: webDarkTheme };
         globalThis.applyFluentTheme = (name) => {
-            if (typeof globalThis.setTheme === "function") {
-                globalThis.setTheme(globalThis.__azScoutFluentThemes[name] || webLightTheme);
-            }
+            setTheme(globalThis.__azScoutFluentThemes[name] || webLightTheme);
         };
         globalThis.applyFluentTheme(
             document.documentElement.getAttribute("data-bs-theme") || "light"

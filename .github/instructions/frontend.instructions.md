@@ -31,10 +31,11 @@ Reusable renderers available to all plugins via the `window.azScout.components` 
 
 ## Component library (Fluent UI Web Components v3)
 
-- Loaded from CDN as an ES module: `<script type="module" src="https://unpkg.com/@fluentui/web-components@beta">`.
-- Theme tokens from `@fluentui/tokens` are imported in the same `<script type="module">` block in [`templates/index.html`](../../src/az_scout/templates/index.html) and exposed via `globalThis.applyFluentTheme(name)`; `app.js`'s `applyTheme()` calls it whenever the user toggles light/dark.
+- Loaded from CDN as a self-registering UMD bundle: `<script src="https://cdn.jsdelivr.net/npm/@fluentui/web-components@beta/dist/web-components.min.js">`. The bundle defines every `fluent-*` custom element on load. (We use jsDelivr — already in the CSP allowlist — because the raw ESM build uses a bare `import "tslib"` that browsers can't resolve.)
+- `setTheme` and the theme tokens from `@fluentui/tokens` are imported separately via `+esm` in the inline `<script type="module">` block in [`templates/index.html`](../../src/az_scout/templates/index.html) and exposed via `globalThis.applyFluentTheme(name)`; `app.js`'s `applyTheme()` calls it whenever the user toggles light/dark.
 - New chrome should prefer `<fluent-button>`, `<fluent-text-input>`, `<fluent-dropdown>`, `<fluent-dialog>`, `<fluent-switch>`, `<fluent-badge>`, etc. — see [`DESIGN.md`](../../DESIGN.md) for the migration table.
-- Bootstrap markup keeps working: token overrides on `--bs-*` make plain `.btn`, `.card`, `.modal` look Fluent. Use Bootstrap where Fluent has no equivalent (grid, off-canvas, tab-strip drag-and-drop).
+- The core templates (`index.html`, `login.html`) intentionally **do not** use Bootstrap classes for layout — they rely on Fluent web components and a thin `app-*` utility namespace built on `--fl-*` tokens.
+- Bootstrap CSS + JS are still loaded for **plugin compatibility**: the plugin contract (main `#mainTabs` `nav-tabs`, plugin off-canvas, Plugin Manager modal, sibling-plugin renderers like `sku-detail-modal.js`) uses Bootstrap markup. Token overrides on `--bs-*` keep that markup theme-aligned. Do not remove the Bootstrap bundle imports.
 
 ## HTML templates
 

@@ -12,17 +12,21 @@
     <link href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11/build/styles/atom-one-dark.min.css" rel="stylesheet" id="hljs-theme">
     <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}">
     <!-- Fluent UI Web Components v3 (see DESIGN.md) -->
-    <script type="module" src="https://unpkg.com/@fluentui/web-components@beta"></script>
+    <!--
+        web-components.min.js is the self-registering UMD bundle. Loaded as a
+        regular (non-module) <script> so it runs synchronously and registers
+        every fluent-* custom element before downstream HTML is parsed.
+        setTheme + theme tokens come from the +esm bundles (jsDelivr rewrites
+        the package's bare 'tslib' import so it resolves in the browser).
+    -->
+    <script src="https://cdn.jsdelivr.net/npm/@fluentui/web-components@beta/dist/web-components.min.js"></script>
     <script type="module">
-        import { webLightTheme, webDarkTheme } from "https://unpkg.com/@fluentui/tokens@latest";
-        // The @fluentui/web-components bundle exposes setTheme on globalThis.
+        import { setTheme } from "https://cdn.jsdelivr.net/npm/@fluentui/web-components@beta/+esm";
+        import { webLightTheme, webDarkTheme } from "https://cdn.jsdelivr.net/npm/@fluentui/tokens@latest/+esm";
         globalThis.__azScoutFluentThemes = { light: webLightTheme, dark: webDarkTheme };
         globalThis.applyFluentTheme = (name) => {
-            if (typeof globalThis.setTheme === "function") {
-                globalThis.setTheme(globalThis.__azScoutFluentThemes[name] || webLightTheme);
-            }
+            setTheme(globalThis.__azScoutFluentThemes[name] || webLightTheme);
         };
-        // Apply the initial theme once both bundles have resolved.
         globalThis.applyFluentTheme(
             document.documentElement.getAttribute("data-bs-theme") || "light"
         );

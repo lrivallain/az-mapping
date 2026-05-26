@@ -2,11 +2,11 @@
 version: alpha
 name: az-scout
 description: |
-  Azure Scout's visual design system. Adopts the Microsoft Fluent 2 (Fluent Web)
-  token surface (brand ramp, neutral ramp, type ramp, corner radii, elevation),
-  layered on top of Bootstrap 5.3 by overriding `--bs-*` variables. Plugin
-  authors consume the same tokens and therefore inherit the Fluent look for
-  free.
+  Azure Scout's visual design system. Adopts the Microsoft Fluent 2 design
+  language (token surface — brand ramp, neutral ramp, type ramp, corner radii,
+  elevation) and implements it with the Fluent UI Web Components v3 (beta)
+  library. A thin Bootstrap 5.3 compatibility layer maps the same tokens onto
+  `--bs-*` variables so plugin markup using Bootstrap classes stays in theme.
 colors:
   # Brand ramp (Fluent 2 Communication blue, brand80)
   brand-primary: "#0F6CBD"
@@ -164,15 +164,26 @@ components:
 
 Azure Scout's UI adopts the **Microsoft Fluent 2** ([fluent2.microsoft.design](https://fluent2.microsoft.design/)) design language end-to-end:
 
-1. **Component library** — [`@fluentui/web-components`](https://github.com/microsoft/fluentui/tree/master/packages/web-components) v3 (beta), loaded from CDN as a single ES module. Native browser custom elements; no bundler, no framework, no npm.
+1. **Component library** — [`@fluentui/web-components`](https://github.com/microsoft/fluentui/tree/master/packages/web-components) **v3** (beta), loaded from CDN as a self-registering UMD bundle. Native browser custom elements; no bundler, no framework, no npm.
 2. **Token surface** — brand ramp, neutral ramp, type ramp, corner radii, and elevation tokens defined here and materialised as CSS variables.
-3. **Bootstrap 5.3 compatibility layer** — the same tokens are mapped onto `--bs-*` variables so the existing grid, utilities, and “non-Fluent” components (modals, off-canvas, tab strip) keep working and visually match.
+3. **Bootstrap 5.3 compatibility layer** — the same tokens are mapped onto `--bs-*` variables so that **plugin** markup using Bootstrap classes (modals, off-canvas, tab strip, grid utilities) keeps working and visually matches. Core templates no longer rely on Bootstrap for layout — they use the Fluent token surface directly.
 
 Plugin authors can use either Fluent web components (`<fluent-button>`, `<fluent-text-input>`, `<fluent-switch>`, …) or Bootstrap classes — both consume the same tokens and stay in sync with the core theme automatically.
 
+### Naming: "Fluent 2" vs "Fluent UI v3"
+
+The two terms appear together throughout this codebase and are **not interchangeable** — they describe different things, and Microsoft itself uses both:
+
+| Term | Meaning | Where you see it |
+|---|---|---|
+| **Fluent 2** | The **design system** — the spec for color, typography, spacing, radii, elevation, motion. Versioned independently of any implementation. | Token names (`--fl-color-*`, `--fl-radius-*`), DESIGN.md front matter, code comments that reference design semantics. |
+| **Fluent UI Web Components v3** (also "Fluent UI v3" / "Fluent v3") | The **library** that implements Fluent 2 as native browser custom elements. Major version 3 of `@fluentui/web-components`. | `<fluent-button>`, `<fluent-tablist>`, …; the CDN bundle URL; any reference to the runtime components. |
+
+When in doubt: use **"Fluent 2"** when referring to tokens or design semantics, and **"Fluent UI v3"** when referring to the components themselves.
+
 **Source of truth:** this file.
 **Runtime materialisation:** [`src/az_scout/static/css/style.css`](src/az_scout/static/css/style.css) (the `:root` and `[data-bs-theme="dark"]` blocks at the top).
-**Component bundle:** loaded in [`templates/index.html`](src/az_scout/templates/index.html) and [`templates/login.html`](src/az_scout/templates/login.html) via `<script type="module" src="https://unpkg.com/@fluentui/web-components@beta">`.
+**Component bundle:** loaded in [`templates/index.html`](src/az_scout/templates/index.html) and [`templates/login.html`](src/az_scout/templates/login.html) via `<script src="https://cdn.jsdelivr.net/npm/@fluentui/web-components@beta/dist/web-components.min.js">` (self-registering UMD; the raw ESM build uses a bare `tslib` import the browser can't resolve).
 
 ## Colors
 
@@ -213,9 +224,9 @@ The full ramp (Caption 2 → Display 1) is defined in the front matter `typograp
 
 ## Layout
 
-- **Grid:** Bootstrap 12-column grid (unchanged). The container uses `container-fluid` with `16px` (`{spacing.l}`) horizontal gutters.
+- **Grid:** the core templates use plain CSS flex / grid driven by the `--fl-space-*` token scale. Plugins may use the Bootstrap 12-column grid (it stays available via the Bootstrap CSS bundle); both approaches share the same `4-px` spacing rhythm.
 - **Page chrome:** 48-px navbar (`{components.navbar.height}`), 1-px border-subtle bottom rule, no shadow.
-- **Spacing scale:** 2/4/8/12/16/20/24/32 px (Fluent 2 4-px base). Bootstrap utilities (`p-1`, `gap-2`, `mb-3`, …) keep their 4-px relationship and now align with Fluent.
+- **Spacing scale:** 2/4/8/12/16/20/24/32 px (Fluent 2 4-px base). Both Bootstrap utilities (`p-1`, `gap-2`, `mb-3`, …) and the core `--fl-space-*` tokens keep the same 4-px relationship.
 
 ## Elevation & Depth
 
@@ -280,14 +291,21 @@ This file documents the **target** state. Live migration of every control is inc
 | About plugin row icon | ✅ `<fluent-avatar color="brand">` | done (wave C) |
 | Loading spinners (PM, topology, planner) | ✅ `<fluent-spinner>` | done (wave C) |
 | Plugin source badges (pypi / github / built-in / not-loaded) | ✅ `<fluent-badge appearance="filled">` | done (wave C) |
-| About / Plugin Manager modals | Bootstrap `.modal` | `<fluent-dialog>` (deferred — modal trigger wiring needs rework) |
-| Main tab strip | Bootstrap `.nav-tabs` | `<fluent-tablist>` (deferred — plugins inject tabs dynamically; would break plugin contract) |
+| About / Plugin Manager modals | Bootstrap `.modal` | Kept as Bootstrap `.modal` — these are part of the **plugin surface**: Plugin Manager renders into `.modal-body`, and sibling plugins (e.g. SKU detail) reuse the same Bootstrap modal machinery. Migrating would force every plugin to rewrite its modal calls. |
+| Main tab strip (`#mainTabs`) | Bootstrap `.nav-tabs` | Kept as Bootstrap `.nav-tabs` — plugins register tabs by emitting `<button data-bs-toggle="tab">`. This is the **plugin contract**. |
+| Plugin off-canvas panels | Bootstrap `.offcanvas` | Kept — also part of the **plugin contract** (plugin navbar actions). |
 | Region combobox | Bootstrap input + custom dropdown | `<fluent-dropdown>` (later) |
 | Plugin Manager action buttons | Bootstrap `.btn` w/ tooltips | `<fluent-button>` (later — Bootstrap tooltip JS used elsewhere) |
 
+### Core vs plugin surfaces
+
+The migration table above intentionally **stops at the plugin contract boundary**. The core templates (`index.html`, `login.html`) no longer use Bootstrap for layout — they rely on the Fluent token surface and a thin `app-*` utility namespace. But every surface that plugins emit, render into, or open programmatically (modals, off-canvas drawers, the tab strip, form controls inside plugin panels) **stays as Bootstrap markup** so sibling plugins keep working without modification.
+
+The Bootstrap CSS + JS bundles are still loaded in `index.html` for that reason. They are a **compatibility runtime** for plugins, not a core dependency.
+
 ### Component contracts
 
-Each component below pins a Fluent 2 spec. The first migration wave (navbar buttons + theme toggle) uses `<fluent-button>`; everything else still uses the Bootstrap class shown, with token overrides making it look Fluent.
+Each component below pins a Fluent 2 spec. Core templates use `<fluent-*>` web components wherever the v3 library provides one; the remaining Bootstrap-classed components below are kept for **plugin compatibility** and are theme-aligned via the `--bs-*` bridge in `style.css`.
 
 ### Primary button (`button-primary`)
 - Spec: brand fill, white foreground, 32 px min-height, 4 px radius, 2 px brand focus ring
