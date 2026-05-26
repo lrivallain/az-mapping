@@ -267,13 +267,23 @@ This file documents the **target** state. Live migration of every control is inc
 
 | Surface | Today | Target |
 |---|---|---|
-| Navbar action buttons | `<button class="btn btn-outline-secondary">` | `<fluent-button appearance="subtle" icon-only>` |
-| Theme toggle | Bootstrap button + onclick | `<fluent-button>` calling `setTheme(webLightTheme \| webDarkTheme)` |
-| Primary chat send | Bootstrap `.btn-primary` | `<fluent-button appearance="primary">` |
-| About / Plugin Manager modals | Bootstrap `.modal` | `<fluent-dialog>` (later — modal trigger wiring needs rework) |
-| Tab strip | Bootstrap `.nav-tabs` | `<fluent-tablist>` (later — plugins inject tabs dynamically) |
+| Navbar action buttons | ✅ `<fluent-button appearance="subtle">` | done (wave B) |
+| Theme toggle | ✅ `<fluent-button>` calling `setTheme()` | done (wave B) |
+| Primary chat send / login submit | ✅ `<fluent-button appearance="primary">` | done (wave B) |
+| Chat thinking dots | ✅ `<fluent-spinner size="tiny">` | done (wave C) |
+| Tool-call status pills | ✅ `<fluent-badge color="warning\|success">` | done (wave C) |
+| Chat choice chips | ✅ `<fluent-button shape="circular" appearance="outline">` | done (wave C) |
+| Chat mode toggle (pill switch) | ✅ `<fluent-tablist appearance="subtle">` + `<fluent-tab>` | done (wave C) |
+| Chat header buttons + tooltips | ✅ `<fluent-button icon-only>` + `<fluent-tooltip>` | done (wave C) |
+| About modal links | ✅ `<fluent-anchor-button shape="circular">` | done (wave C) |
+| About version + plugin version | ✅ `<fluent-badge appearance="tint">` | done (wave C) |
+| About plugin row icon | ✅ `<fluent-avatar color="brand">` | done (wave C) |
+| Loading spinners (PM, topology, planner) | ✅ `<fluent-spinner>` | done (wave C) |
+| Plugin source badges (pypi / github / built-in / not-loaded) | ✅ `<fluent-badge appearance="filled">` | done (wave C) |
+| About / Plugin Manager modals | Bootstrap `.modal` | `<fluent-dialog>` (deferred — modal trigger wiring needs rework) |
+| Main tab strip | Bootstrap `.nav-tabs` | `<fluent-tablist>` (deferred — plugins inject tabs dynamically; would break plugin contract) |
 | Region combobox | Bootstrap input + custom dropdown | `<fluent-dropdown>` (later) |
-| Plugin Manager rows | Bootstrap cards | `<fluent-button>` rows + `<fluent-message-bar>` |
+| Plugin Manager action buttons | Bootstrap `.btn` w/ tooltips | `<fluent-button>` (later — Bootstrap tooltip JS used elsewhere) |
 
 ### Component contracts
 

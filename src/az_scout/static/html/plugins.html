@@ -9,9 +9,7 @@
     </div>
     <!-- Global operation status bar (hidden by default) -->
     <div id="pm-global-status" class="alert alert-info d-none mb-0 py-2 d-flex align-items-center" role="status">
-        <div class="spinner-border spinner-border-sm me-2" role="status">
-            <span class="visually-hidden">Loading…</span>
-        </div>
+        <fluent-spinner size="tiny" appearance="primary" class="me-2" aria-label="Loading"></fluent-spinner>
         <span id="pm-global-status-text">Working…</span>
     </div>
 
@@ -71,9 +69,7 @@
 
                     <!-- Spinner -->
                     <div id="pm-spinner" class="d-none mt-2 text-center">
-                        <div class="spinner-border spinner-border-sm text-primary" role="status">
-                            <span class="visually-hidden">Loading…</span>
-                        </div>
+                        <fluent-spinner size="tiny" appearance="primary" aria-label="Loading"></fluent-spinner>
                         <span class="ms-2 text-body-secondary" id="pm-spinner-text">Validating…</span>
                     </div>
                 </div>

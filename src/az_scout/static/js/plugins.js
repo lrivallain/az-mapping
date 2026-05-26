@@ -40,7 +40,7 @@
         initialized = true;
         container.innerHTML =
             '<div class="text-center py-4 text-muted">' +
-            '<div class="spinner-border spinner-border-sm me-2" role="status"></div>' +
+            '<fluent-spinner size="tiny" appearance="primary" class="me-2"></fluent-spinner>' +
             "Loading…</div>";
 
         // Set up the callback BEFORE injecting catalog.html so the inline script can call it
@@ -269,8 +269,8 @@
             sourceHtml = '<span class="text-body-secondary" style="font-size:0.75rem">built-in</span>';
         } else if (record) {
             sourceHtml = record.source === "pypi"
-                ? '<span class="badge text-bg-success text-uppercase" style="font-size:0.65rem">pypi</span>'
-                : '<span class="badge text-bg-secondary text-uppercase" style="font-size:0.65rem">github</span>';
+                ? '<fluent-badge appearance="filled" color="success" style="font-size:0.65rem;text-transform:uppercase;">pypi</fluent-badge>'
+                : '<fluent-badge appearance="filled" color="subtle" style="font-size:0.65rem;text-transform:uppercase;">github</fluent-badge>';
         } else {
             sourceHtml = '<span class="text-body-secondary" style="font-size:0.75rem">pip / system</span>';
         }
@@ -293,7 +293,7 @@
             // Installed as a dependency via PM — manageable
             actionsHtml = '<button class="btn btn-outline-danger btn-sm" onclick="pmUninstall(\'' + escAttr(p.distribution_name || p.name) + '\')"><i class="bi bi-trash me-1"></i>Uninstall</button>';
         } else if (isInternal) {
-            actionsHtml = '<span class="badge text-bg-secondary">built-in</span>';
+            actionsHtml = '<fluent-badge appearance="filled" color="informative">built-in</fluent-badge>';
         } else {
             actionsHtml = '<span class="badge bg-success" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Installed outside the plugin manager (e.g. pip, Dockerfile). Not manageable from this UI.">external</span>';
         }
@@ -328,8 +328,8 @@
         btnsLine += '<button class="btn btn-outline-danger btn-sm" onclick="pmUninstall(\'' + escAttr(r.distribution_name) + '\')"><i class="bi bi-trash me-1"></i>Uninstall</button>';
 
         const sourceBadge = r.source === "pypi"
-            ? '<span class="badge text-bg-success text-uppercase" style="font-size:0.65rem">pypi</span>'
-            : '<span class="badge text-bg-secondary text-uppercase" style="font-size:0.65rem">github</span>';
+            ? '<fluent-badge appearance="filled" color="success" style="font-size:0.65rem;text-transform:uppercase;">pypi</fluent-badge>'
+            : '<fluent-badge appearance="filled" color="subtle" style="font-size:0.65rem;text-transform:uppercase;">github</fluent-badge>';
 
         return '<div class="col catalog-card-col pm-dynamic-card" data-catalog-name="' + escHtml(r.distribution_name) + '" data-catalog-tags="" data-catalog-desc="">' +
             '<div class="card catalog-card-plugin h-100 border-warning">' +
@@ -338,7 +338,7 @@
                         '<span class="fw-semibold">' + escHtml(r.distribution_name) + '</span> ' +
                         sourceBadge +
                     '</div>' +
-                    '<div class="d-flex flex-wrap gap-1"><span class="badge text-bg-warning">not loaded</span></div>' +
+                    '<div class="d-flex flex-wrap gap-1"><fluent-badge appearance="filled" color="warning">not loaded</fluent-badge></div>' +
                     '<div class="d-flex align-items-center justify-content-between mt-auto pt-1">' +
                         '<span class="small text-body-secondary">' + escHtml(r.ref || '') + '</span>' +
                         '<span class="d-flex align-items-center gap-2 catalog-actions">' + btnsLine + '</span>' +

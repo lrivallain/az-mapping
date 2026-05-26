@@ -58,7 +58,7 @@
 
 <!-- Loading -->
 <div id="planner-loading" data-testid="planner-loading" class="text-center py-5 d-none">
-    <div class="spinner-border text-primary" role="status"></div>
+    <fluent-spinner appearance="primary" aria-label="Loading"></fluent-spinner>
     <p class="mt-2 text-body-secondary">Fetching SKU data…</p>
 </div>
 
@@ -81,7 +81,7 @@
                 <label for="spot-modal-instances" class="form-label small">Number of instances:</label>
                 <input type="number" class="form-control form-control-sm mb-3" id="spot-modal-instances" value="1" min="1" max="1000">
                 <div id="spot-modal-loading" class="text-center d-none">
-                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                    <fluent-spinner size="tiny" appearance="primary" aria-label="Loading"></fluent-spinner>
                     <span class="ms-2 small">Fetching score…</span>
                 </div>
                 <div id="spot-modal-result" class="d-none"></div>

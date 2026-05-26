@@ -81,7 +81,15 @@ const _CHAT_WELCOME = {
 };
 
 function switchChatMode(mode) {
-    if (mode === _chatMode || _chatStreaming) return;
+    if (mode === _chatMode) return;
+    if (_chatStreaming) {
+        // Streaming locks the mode — fluent-tablist already moved its visual
+        // selection on click, so revert it to the active mode.
+        const tablist = document.getElementById("chat-mode-toggle");
+        const currentTab = tablist?.querySelector(`fluent-tab[data-mode="${_chatMode}"]`);
+        if (tablist && currentTab) tablist.setAttribute("activeid", currentTab.id);
+        return;
+    }
 
     // Save current mode's conversation state
     _chatModeState[_chatMode].messages = [..._chatMessages];
@@ -96,10 +104,10 @@ function switchChatMode(mode) {
     _chatMode = mode;
     try { localStorage.setItem(_CHAT_MODE_KEY, mode); } catch {}
 
-    // Update toggle UI
-    document.querySelectorAll("#chat-mode-toggle button").forEach(btn => {
-        btn.classList.toggle("active", btn.dataset.mode === mode);
-    });
+    // Update toggle UI — fluent-tablist uses an activeid attribute
+    const tablist = document.getElementById("chat-mode-toggle");
+    const targetTab = tablist?.querySelector(`fluent-tab[data-mode="${mode}"]`);
+    if (tablist && targetTab) tablist.setAttribute("activeid", targetTab.id);
 
     // Restore target mode's conversation (or start fresh)
     _chatMessages = [...(_chatModeState[mode].messages || [])];
@@ -219,9 +227,9 @@ function _restoreChatHistory() {
                 _chatModeState[savedMode] = { messages: [], inputHistory: [] };
             }
             _chatMode = savedMode;
-            document.querySelectorAll("#chat-mode-toggle button").forEach(b => {
-                b.classList.toggle("active", b.dataset.mode === _chatMode);
-            });
+            const tablist = document.getElementById("chat-mode-toggle");
+            const savedTab = tablist?.querySelector(`fluent-tab[data-mode="${_chatMode}"]`);
+            if (tablist && savedTab) tablist.setAttribute("activeid", savedTab.id);
         }
 
         let hasHistory = false;
@@ -339,7 +347,7 @@ async function sendChatMessage() {
 
     // Create assistant bubble with thinking indicator
     const assistantBubble = _appendChatBubble("assistant", "");
-    assistantBubble.innerHTML = '<span class="chat-thinking"><span class="dot"></span><span class="dot"></span><span class="dot"></span></span>';
+    assistantBubble.innerHTML = '<fluent-spinner size="tiny" appearance="primary" aria-label="Thinking…"></fluent-spinner>';
     _scrollChatBottom();
     const sendBtn = document.getElementById("chat-send-btn");
     _chatStreaming = true;
@@ -363,7 +371,7 @@ async function sendChatMessage() {
         if (!resp.ok) {
             const err = await resp.text();
             assistantBubble.innerHTML = `<span class="text-danger">Error: ${escapeHtml(err)}</span>`
-                + '<br><button class="chat-choice-chip mt-2" onclick="_retryChatMessage(this)">Retry</button>';
+                + '<br><fluent-button class="chat-choice-chip mt-2" appearance="outline" shape="circular" size="small" onclick="_retryChatMessage(this)">Retry</fluent-button>';
             _chatStreaming = false;
             if (sendBtn) sendBtn.disabled = false;
             return;
@@ -409,7 +417,7 @@ async function sendChatMessage() {
                 } else if (payload.type === "error") {
                     fullContent = ""; // Don't store error as assistant message
                     assistantBubble.innerHTML = `<span class="text-danger"><strong>Error:</strong> ${escapeHtml(payload.content)}</span>`
-                        + '<br><button class="chat-choice-chip mt-2" onclick="_retryChatMessage(this)">Retry</button>';
+                        + '<br><fluent-button class="chat-choice-chip mt-2" appearance="outline" shape="circular" size="small" onclick="_retryChatMessage(this)">Retry</fluent-button>';
                 } else if (payload.type === "done") {
                     // Stream finished
                 }
@@ -422,7 +430,7 @@ async function sendChatMessage() {
         }
     } catch (err) {
         assistantBubble.innerHTML = `<span class="text-danger">Connection error: ${escapeHtml(err.message)}</span>`
-            + '<br><button class="chat-choice-chip mt-2" onclick="_retryChatMessage(this)">Retry</button>';
+            + '<br><fluent-button class="chat-choice-chip mt-2" appearance="outline" shape="circular" size="small" onclick="_retryChatMessage(this)">Retry</fluent-button>';
     } finally {
         _chatStreaming = false;
         if (sendBtn) sendBtn.disabled = false;
@@ -471,7 +479,7 @@ function _onChatChoiceClick(btn) {
     // Dim all choice chips in the same bubble to show selection was made
     const bubble = btn.closest(".chat-bubble");
     if (bubble) {
-        bubble.querySelectorAll(".chat-choice-chip").forEach(c => { c.classList.add("used"); });
+        bubble.querySelectorAll(".chat-choice-chip").forEach(c => { c.setAttribute("disabled", ""); c.classList.add("used"); });
     }
     // Populate input and send
     const input = document.getElementById("chat-input");
@@ -529,11 +537,13 @@ function _appendToolStatus(msgDiv, toolName, _status, argsJson) {
         const bubble = msgDiv.querySelector(".chat-bubble");
         msgDiv.insertBefore(toolsDiv, bubble);
     }
-    const badge = document.createElement("span");
-    badge.className = "chat-tool-badge calling";
+    const badge = document.createElement("fluent-badge");
+    badge.setAttribute("appearance", "filled");
+    badge.setAttribute("color", "warning");
+    badge.classList.add("chat-tool-badge", "calling");
     badge.dataset.tool = toolName;
     const friendlyName = toolName.replace(/_/g, " ");
-    badge.innerHTML = `<i class="bi bi-gear-fill spin"></i> ${escapeHtml(friendlyName)}`;
+    badge.innerHTML = `<fluent-spinner size="tiny" aria-hidden="true"></fluent-spinner> ${escapeHtml(friendlyName)}`;
     // Store arguments for later inspection
     if (argsJson) {
         badge.dataset.toolArgs = typeof argsJson === "string" ? argsJson : JSON.stringify(argsJson);
@@ -544,7 +554,9 @@ function _appendToolStatus(msgDiv, toolName, _status, argsJson) {
 function _updateToolStatus(msgDiv, toolName, status, argsJson, contentStr) {
     const badge = msgDiv.querySelector(`.chat-tool-badge[data-tool="${toolName}"]`);
     if (!badge) return;
-    badge.className = `chat-tool-badge ${status}`;
+    badge.classList.remove("calling");
+    badge.classList.add(status);
+    badge.setAttribute("color", status === "done" ? "success" : "danger");
     const friendlyName = toolName.replace(/_/g, " ");
     badge.innerHTML = `<i class="bi bi-check-circle-fill"></i> ${escapeHtml(friendlyName)}`;
     // Store final arguments (may include auto-injected params) and result content
@@ -737,7 +749,7 @@ function _renderMarkdown(md) {
     // Post-process: restore chip placeholders as clickable buttons
     let result = html.replace(/%%CHIP_(\d+)%%/g, (_m, idx) => {
         const text = chipPlaceholders[Number(idx)] || "";
-        return `<button class="chat-choice-chip" onclick="_onChatChoiceClick(this)">${escapeHtml(text)}</button>`;
+        return `<fluent-button class="chat-choice-chip" appearance="outline" shape="circular" size="small" onclick="_onChatChoiceClick(this)">${escapeHtml(text)}</fluent-button>`;
     });
 
     // Convert lists whose items are ALL choice chips into compact chip groups
@@ -767,7 +779,7 @@ function _containsOnlyChoiceChips(content) {
     let remaining = content.trim();
     if (!remaining) return false;
 
-    const chipPrefix = '<button class="chat-choice-chip"';
+    const chipPrefix = '<fluent-button class="chat-choice-chip"';
     const closeTag = "</button>";
 
     while (remaining.length > 0) {
